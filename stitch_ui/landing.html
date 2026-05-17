@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DecisionGraph | Institutional Memory OS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=IBM+Plex+Sans:wght@500&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+                  "surface-container-lowest": "#0e0d15",
+                  "surface-container-low": "#1c1b23",
+                  "inverse-on-surface": "#312f38",
+                  "error": "#ffb4ab",
+                  "on-secondary-fixed-variant": "#004f50",
+                  "surface": "#13121b",
+                  "on-primary": "#2b009e",
+                  "tertiary-fixed-dim": "#51df9c",
+                  "tertiary-fixed": "#71fcb6",
+                  "surface-container-highest": "#35343d",
+                  "tertiary-container": "#00a56b",
+                  "on-error-container": "#ffdad6",
+                  "on-tertiary": "#003822",
+                  "inverse-surface": "#e5e0ed",
+                  "on-secondary-container": "#003e3e",
+                  "secondary-fixed-dim": "#4ddada",
+                  "on-background": "#e5e0ed",
+                  "background": "#13121b",
+                  "on-secondary": "#003737",
+                  "secondary": "#4ddada",
+                  "error-container": "#93000a",
+                  "on-secondary-fixed": "#002020",
+                  "on-surface-variant": "#c9c4d7",
+                  "inverse-primary": "#5a46d3",
+                  "primary-fixed-dim": "#c7bfff",
+                  "primary": "#c7bfff",
+                  "surface-tint": "#c7bfff",
+                  "on-primary-fixed": "#180065",
+                  "surface-dim": "#13121b",
+                  "surface-container": "#201f27",
+                  "on-tertiary-fixed": "#002112",
+                  "secondary-fixed": "#6ff7f6",
+                  "primary-container": "#8e7fff",
+                  "on-primary-fixed-variant": "#4228bb",
+                  "on-tertiary-fixed-variant": "#005233",
+                  "on-error": "#690005",
+                  "outline": "#928ea0",
+                  "surface-container-high": "#2a2932",
+                  "secondary-container": "#00b3b3",
+                  "outline-variant": "#474554",
+                  "tertiary": "#51df9c",
+                  "primary-fixed": "#e4deff",
+                  "on-tertiary-container": "#00311d",
+                  "on-surface": "#e5e0ed",
+                  "surface-bright": "#3a3841",
+                  "surface-variant": "#35343d",
+                  "on-primary-container": "#25008c"
+          },
+          "borderRadius": {
+                  "DEFAULT": "0.25rem",
+                  "lg": "0.5rem",
+                  "xl": "0.75rem",
+                  "full": "9999px"
+          },
+          "spacing": {
+                  "gutter": "24px",
+                  "lg": "24px",
+                  "margin": "32px",
+                  "xl": "40px",
+                  "md": "16px",
+                  "xs": "4px",
+                  "sm": "8px"
+          },
+          "fontFamily": {
+                  "label-sm": ["IBM Plex Sans"],
+                  "headline-md": ["Inter"],
+                  "body-lg": ["Inter"],
+                  "display": ["Inter"],
+                  "headline-lg": ["Inter"],
+                  "body-md": ["Inter"],
+                  "mono-data": ["JetBrains Mono"],
+                  "micro-caps": ["Inter"]
+          },
+          "fontSize": {
+                  "label-sm": ["13px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                  "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                  "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                  "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                  "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                  "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                  "mono-data": ["14px", {"lineHeight": "1.4", "fontWeight": "400"}],
+                  "micro-caps": ["10px", {"lineHeight": "1", "letterSpacing": "0.1em", "fontWeight": "700"}]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      line-height: 1;
+      text-transform: none;
+      letter-spacing: normal;
+      word-wrap: normal;
+      white-space: nowrap;
+      direction: ltr;
+    }
+    .node-pattern {
+      background-image: radial-gradient(circle at 1px 1px, #474554 1px, transparent 0);
+      background-size: 40px 40px;
+    }
+    .glass-card {
+      background: rgba(42, 41, 50, 0.4);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(71, 69, 84, 0.3);
+    }
+
+    /* ───────── animations + transitions (additive, design unchanged) ───────── */
+    html { scroll-behavior: smooth; }
+    body { opacity: 0; animation: pageIn .6s ease forwards; }
+    @keyframes pageIn { to { opacity: 1; } }
+    body.leaving { animation: pageOut .45s ease forwards; }
+    @keyframes pageOut { to { opacity: 0; transform: translateY(-10px); } }
+
+    /* hero entrance — staggered */
+    .hero-rise { opacity: 0; transform: translateY(26px); animation: heroRise .9s cubic-bezier(.16,1,.3,1) forwards; }
+    .hero-rise.d1 { animation-delay: .15s; }
+    .hero-rise.d2 { animation-delay: .30s; }
+    .hero-rise.d3 { animation-delay: .45s; }
+    .hero-rise.d4 { animation-delay: .60s; }
+    @keyframes heroRise { to { opacity: 1; transform: none; } }
+
+    /* scroll-reveal for sections/cards */
+    .reveal { opacity: 0; transform: translateY(34px);
+      transition: opacity .8s cubic-bezier(.16,1,.3,1), transform .8s cubic-bezier(.16,1,.3,1); }
+    .reveal.in { opacity: 1; transform: none; }
+    .reveal.s1 { transition-delay: .08s; }
+    .reveal.s2 { transition-delay: .16s; }
+    .reveal.s3 { transition-delay: .24s; }
+
+    /* floating ambient glow + showcase lift */
+    @keyframes floatGlow {
+      0%,100% { transform: translate(-50%, -50%) scale(1); opacity: .9; }
+      50%     { transform: translate(-50%, -52%) scale(1.08); opacity: 1; }
+    }
+    .glow-float { animation: floatGlow 9s ease-in-out infinite; }
+    @keyframes softFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    .soft-float { animation: softFloat 7s ease-in-out infinite; }
+
+    /* subtle drifting node grid */
+    @keyframes gridDrift { from { background-position: 0 0; } to { background-position: 40px 40px; } }
+    .node-pattern.drift { animation: gridDrift 6s linear infinite; }
+
+    /* button micro-interactions (on top of their existing transitions) */
+    .cta-press { transition: transform .15s ease, box-shadow .25s ease, filter .2s ease; }
+    .cta-press:hover { transform: translateY(-2px); }
+    .cta-press:active { transform: translateY(0) scale(.97); }
+
+    /* card hover lift */
+    .lift { transition: transform .35s cubic-bezier(.16,1,.3,1), border-color .3s ease; }
+    .lift:hover { transform: translateY(-6px); }
+
+    @media (prefers-reduced-motion: reduce) {
+      body, .hero-rise, .reveal, .glow-float, .soft-float, .node-pattern.drift { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface font-body-md antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopNavBar -->
+<header class="docked full-width top-0 sticky z-50 bg-surface/80 backdrop-blur-md dark:bg-surface/80 border-b border-outline-variant/30">
+<div class="flex justify-between items-center h-20 px-margin max-w-[1440px] mx-auto">
+<div class="flex items-center gap-sm cursor-pointer go-app" title="Enter DecisionGraph">
+<img alt="Logo" class="h-8 w-8 object-contain" src="https://lh3.googleusercontent.com/aida/ADBb0uhONwzOXBhi7Cy3Zib6I_SaQ0Qf_cuoTaO8yMg7HlG8QD7YDGWlLr5fZE_ly3mr2ykiDSvBDpZ6wfvkTV1F9HeWXuP-HSAPjWRHZeIkU-RZh64QwtkqqNTCDaJWgOGudQE-lbHV37E9y8d5dg-j9wl2nsToJSj4Yjmio8i-tdMqOiTs64BXzuRJDjEHNfHJUIQL1I8TUPc98VegifC4N0HaPKPVGfNkPwprg8nF-OZkQ02AM2ufFPSCyTBf"/>
+<span class="text-headline-md font-headline-md tracking-tight text-on-surface dark:text-on-surface">DecisionGraph</span>
+</div>
+<nav class="hidden md:flex items-center gap-xl">
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface transition-colors text-label-sm font-label-sm" href="#">Solutions</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface transition-colors text-label-sm font-label-sm" href="#">Platform</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface transition-colors text-label-sm font-label-sm" href="#">Enterprise</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface transition-colors text-label-sm font-label-sm" href="#">Security</a>
+</nav>
+<div class="flex items-center gap-md">
+<button class="hidden md:block text-on-surface-variant hover:text-on-surface text-label-sm font-label-sm px-md py-sm transition-colors go-app">Sign In</button>
+<button class="go-app cta-press bg-primary text-on-primary text-label-sm font-label-sm px-xl py-sm rounded-lg hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-primary/10">Get Started</button>
+</div>
+</div>
+</header>
+<main>
+<!-- Hero Section -->
+<section class="relative min-h-[85vh] flex flex-col justify-center items-center text-center px-margin overflow-hidden">
+<div class="absolute inset-0 node-pattern drift opacity-30 pointer-events-none"></div>
+<div class="glow-float absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/5 rounded-full blur-[120px] pointer-events-none"></div>
+<div class="relative z-10 max-w-4xl mx-auto">
+<div class="hero-rise inline-flex items-center gap-xs px-sm py-xs bg-surface-container-high border border-outline-variant rounded-full mb-lg">
+<span class="material-symbols-outlined text-[14px] text-tertiary">neurology</span>
+<span class="text-micro-caps uppercase tracking-widest text-on-surface-variant">V2.4 Intelligence Engine Released</span>
+</div>
+<h1 class="hero-rise d1 text-display font-display mb-md bg-gradient-to-br from-on-surface via-on-surface to-on-surface-variant bg-clip-text text-transparent">
+          The Operating System for Institutional Memory
+        </h1>
+<p class="hero-rise d2 text-body-lg font-body-lg text-on-surface-variant mb-xl max-w-2xl mx-auto">
+          Harness the power of your organization's collective intelligence with an interconnected graph of knowledge, decisions, and discussions.
+        </p>
+<div class="hero-rise d3 flex flex-col sm:flex-row gap-md justify-center">
+<button class="go-app cta-press bg-primary text-on-primary px-xl py-md rounded-xl text-label-sm font-label-sm flex items-center justify-center gap-sm hover:brightness-110 transition-all shadow-2xl shadow-primary/20 group">
+            Get Started
+            <span class="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+<button class="go-app cta-press bg-surface-container-high border border-outline-variant text-on-surface px-xl py-md rounded-xl text-label-sm font-label-sm flex items-center justify-center gap-sm hover:bg-surface-container-highest transition-all">
+<span class="material-symbols-outlined">play_circle</span>
+            Watch Demo
+          </button>
+</div>
+</div>
+</section>
+<!-- Product Showcase -->
+<section class="px-margin pb-xl">
+<div class="reveal max-w-[1440px] mx-auto">
+<div class="soft-float relative rounded-[32px] overflow-hidden border border-outline-variant/30 shadow-2xl shadow-surface-container-lowest bg-surface-container">
+<div class="absolute top-0 inset-x-0 h-12 bg-surface-container-highest flex items-center px-lg border-b border-outline-variant/20">
+<div class="flex gap-xs">
+<div class="w-3 h-3 rounded-full bg-error/50"></div>
+<div class="w-3 h-3 rounded-full bg-tertiary/50"></div>
+<div class="w-3 h-3 rounded-full bg-primary/50"></div>
+</div>
+<div class="mx-auto bg-surface-container-low px-xl py-xs rounded-lg text-micro-caps text-on-surface-variant border border-outline-variant/10">
+              graph.decisiongraph.app/visualization/v5
+            </div>
+</div>
+<div class="pt-12 aspect-[16/9] w-full bg-surface-container-lowest relative overflow-hidden">
+<style>
+  .dgkg{width:100%;height:100%;display:block}
+  .dgkg .grid{stroke:#474554;stroke-width:.5;opacity:.18}
+  .dgkg .edge{stroke-linecap:round;fill:none;opacity:0;
+    stroke-dasharray:var(--len);stroke-dashoffset:var(--len);
+    animation:dgDraw 1.1s ease forwards,dgEdgeGlow 4s ease-in-out infinite}
+  @keyframes dgDraw{to{stroke-dashoffset:0;opacity:.7}}
+  @keyframes dgEdgeGlow{0%,100%{opacity:.35}50%{opacity:.8}}
+  .dgkg .node{opacity:0;transform:scale(0);transform-box:fill-box;transform-origin:center;
+    animation:dgPop .5s cubic-bezier(.34,1.56,.64,1) forwards}
+  @keyframes dgPop{to{opacity:1;transform:scale(1)}}
+  .dgkg .pulse{transform-box:fill-box;transform-origin:center;animation:dgPulse 2.6s ease-in-out infinite}
+  @keyframes dgPulse{0%,100%{opacity:.25;transform:scale(1)}50%{opacity:.55;transform:scale(2.4)}}
+  .dgkg .scan{animation:dgScan 5.5s linear infinite}
+  @keyframes dgScan{0%{transform:translateX(-30%)}100%{transform:translateX(130%)}}
+  .dgkg .lbl{fill:#c9c4d7;font:600 17px Inter,sans-serif;opacity:0;animation:dgFade .6s ease forwards}
+  @keyframes dgFade{to{opacity:.85}}
+  /* draw order */
+  .e1{animation-delay:.2s}.e2{animation-delay:.45s}.e3{animation-delay:.7s}.e4{animation-delay:.95s}
+  .e5{animation-delay:1.2s}.e6{animation-delay:1.45s}.e7{animation-delay:1.7s}.e8{animation-delay:1.95s}
+  .e9{animation-delay:2.2s}.e10{animation-delay:2.45s}
+  .n1{animation-delay:.1s}.n2{animation-delay:.5s}.n3{animation-delay:.75s}.n4{animation-delay:1s}
+  .n5{animation-delay:1.25s}.n6{animation-delay:1.5s}.n7{animation-delay:1.75s}.n8{animation-delay:2s}
+  .n9{animation-delay:2.25s}.n10{animation-delay:2.5s}.n11{animation-delay:2.7s}
+  @media (prefers-reduced-motion:reduce){
+    .dgkg .edge,.dgkg .node,.dgkg .lbl{animation:none!important;opacity:.7!important;
+      stroke-dashoffset:0!important;transform:none!important}
+    .dgkg .scan,.dgkg .pulse{animation:none!important;opacity:0!important}}
+</style>
+<svg class="dgkg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="dgGlow" cx="50%" cy="45%" r="60%">
+      <stop offset="0%" stop-color="#c7bfff" stop-opacity=".10"/>
+      <stop offset="100%" stop-color="#13121b" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="dgScanGrad" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0%" stop-color="#4ddada" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#4ddada" stop-opacity=".12"/>
+      <stop offset="100%" stop-color="#4ddada" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="#0e0d15"/>
+  <rect width="1600" height="900" fill="url(#dgGlow)"/>
+  <g class="grid">
+    <line x1="0" y1="180" x2="1600" y2="180"/><line x1="0" y1="360" x2="1600" y2="360"/>
+    <line x1="0" y1="540" x2="1600" y2="540"/><line x1="0" y1="720" x2="1600" y2="720"/>
+    <line x1="320" y1="0" x2="320" y2="900"/><line x1="640" y1="0" x2="640" y2="900"/>
+    <line x1="960" y1="0" x2="960" y2="900"/><line x1="1280" y1="0" x2="1280" y2="900"/>
+  </g>
+  <!-- edges (length≈hypot) -->
+  <g stroke="#8e7fff">
+    <line class="edge e1"  style="--len:300" x1="800" y1="450" x2="520" y2="290" stroke-width="2.5"/>
+    <line class="edge e2"  style="--len:300" x1="800" y1="450" x2="1090" y2="280" stroke-width="2.5"/>
+    <line class="edge e3"  style="--len:260" x1="800" y1="450" x2="560" y2="650" stroke-width="2.5"/>
+    <line class="edge e4"  style="--len:300" x1="800" y1="450" x2="1080" y2="640" stroke-width="2.5"/>
+    <line class="edge e5"  style="--len:300" x1="520" y1="290" x2="270" y2="170" stroke="#4ddada" stroke-width="2"/>
+    <line class="edge e6"  style="--len:230" x1="520" y1="290" x2="330" y2="500" stroke="#4ddada" stroke-width="2"/>
+    <line class="edge e7"  style="--len:260" x1="1090" y1="280" x2="1330" y2="180" stroke="#51df9c" stroke-width="2"/>
+    <line class="edge e8"  style="--len:260" x1="1090" y1="280" x2="1300" y2="470" stroke="#51df9c" stroke-width="2"/>
+    <line class="edge e9"  style="--len:240" x1="560" y1="650" x2="360" y2="770" stroke="#4ddada" stroke-width="2"/>
+    <line class="edge e10" style="--len:240" x1="1080" y1="640" x2="1290" y2="760" stroke="#51df9c" stroke-width="2"/>
+  </g>
+  <!-- scanning sweep -->
+  <rect class="scan" x="0" y="0" width="480" height="900" fill="url(#dgScanGrad)"/>
+  <!-- nodes -->
+  <g>
+    <circle class="pulse" cx="800" cy="450" r="34" fill="#c7bfff"/>
+    <circle class="node n1" cx="800" cy="450" r="34" fill="#c7bfff"/>
+    <circle class="node n2" cx="520" cy="290" r="22" fill="#8e7fff"/>
+    <circle class="node n3" cx="1090" cy="280" r="22" fill="#8e7fff"/>
+    <circle class="node n4" cx="560" cy="650" r="22" fill="#8e7fff"/>
+    <circle class="node n5" cx="1080" cy="640" r="22" fill="#8e7fff"/>
+    <circle class="node n6" cx="270" cy="170" r="15" fill="#4ddada"/>
+    <circle class="node n7" cx="330" cy="500" r="15" fill="#4ddada"/>
+    <circle class="node n8" cx="1330" cy="180" r="15" fill="#51df9c"/>
+    <circle class="node n9" cx="1300" cy="470" r="15" fill="#51df9c"/>
+    <circle class="node n10" cx="360" cy="770" r="15" fill="#4ddada"/>
+    <circle class="node n11" cx="1290" cy="760" r="15" fill="#51df9c"/>
+  </g>
+  <g>
+    <text class="lbl n1" x="800" y="408" text-anchor="middle" style="animation-delay:1s">Decision Core</text>
+    <text class="lbl n2" x="520" y="258" text-anchor="middle" fill="#c7bfff" style="animation-delay:1.4s">Knowledge</text>
+    <text class="lbl n3" x="1090" y="248" text-anchor="middle" fill="#c7bfff" style="animation-delay:1.6s">Outcomes</text>
+    <text class="lbl n4" x="560" y="694" text-anchor="middle" fill="#c7bfff" style="animation-delay:1.8s">Sessions</text>
+    <text class="lbl n5" x="1080" y="684" text-anchor="middle" fill="#c7bfff" style="animation-delay:2s">Companies</text>
+  </g>
+</svg>
+</div>
+<!-- Floating UI Elements Overlay -->
+<div class="absolute bottom-lg right-lg glass-card p-md rounded-2xl max-w-xs hidden lg:block">
+<div class="flex items-center gap-sm mb-xs">
+<span class="material-symbols-outlined text-tertiary" style="font-variation-settings: 'FILL' 1;">hub</span>
+<span class="text-label-sm font-label-sm text-on-surface">Knowledge Node Detected</span>
+</div>
+<p class="text-[12px] text-on-surface-variant mb-md">Architecture decision record #402: Migrating to distributed vector clusters.</p>
+<div class="bg-surface-container-lowest p-xs rounded-lg border border-outline-variant/20">
+<code class="text-mono-data text-[11px] text-primary">MATCH (n:Decision) WHERE n.status = 'approved' RETURN n</code>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Features Bento Grid -->
+<section class="py-xl px-margin">
+<div class="max-w-[1440px] mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-12 gap-lg h-auto">
+<!-- Feature 1 -->
+<div class="reveal lift md:col-span-8 group relative bg-surface-container-low border border-outline-variant rounded-[24px] p-xl overflow-hidden hover:border-primary/50 transition-colors">
+<div class="relative z-10">
+<div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-lg group-hover:bg-primary group-hover:text-on-primary transition-all duration-300">
+<span class="material-symbols-outlined text-[28px]">library_books</span>
+</div>
+<h3 class="text-headline-lg font-headline-lg mb-sm">Knowledge Base</h3>
+<p class="text-body-md text-on-surface-variant max-w-md">Ingest and unify fragmented technical docs, whitepapers, and internal wikis into a single source of truth that learns from your expertise.</p>
+</div>
+<div class="absolute -bottom-10 -right-10 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-[200px]" style="font-variation-settings: 'wght' 100;">description</span>
+</div>
+</div>
+<!-- Feature 2 -->
+<div class="reveal s1 lift md:col-span-4 group bg-surface-container-low border border-outline-variant rounded-[24px] p-xl flex flex-col justify-between hover:border-tertiary/50 transition-colors">
+<div>
+<div class="w-12 h-12 rounded-xl bg-tertiary/10 flex items-center justify-center text-tertiary mb-lg group-hover:bg-tertiary group-hover:text-on-tertiary transition-all duration-300">
+<span class="material-symbols-outlined text-[28px]">forum</span>
+</div>
+<h3 class="text-headline-md font-headline-md mb-sm">Discussion Chat</h3>
+<p class="text-body-md text-on-surface-variant">Capture decision rationale in real-time as your team collaborates on complex problems.</p>
+</div>
+<div class="mt-lg pt-lg border-t border-outline-variant/30">
+<div class="flex -space-x-2">
+<div class="w-8 h-8 rounded-full border-2 border-surface-container-low bg-surface-container-highest"></div>
+<div class="w-8 h-8 rounded-full border-2 border-surface-container-low bg-surface-container-highest"></div>
+<div class="w-8 h-8 rounded-full border-2 border-surface-container-low bg-surface-container-highest flex items-center justify-center text-micro-caps text-on-surface-variant font-bold">+12</div>
+</div>
+</div>
+</div>
+<!-- Feature 3 -->
+<div class="reveal s2 md:col-span-12 group bg-surface-container-low border border-outline-variant rounded-[24px] p-xl flex flex-col md:flex-row items-center gap-xl hover:border-primary/50 transition-colors">
+<div class="md:w-1/2">
+<div class="w-12 h-12 rounded-xl bg-primary-container/20 flex items-center justify-center text-primary mb-lg group-hover:scale-110 transition-transform duration-300">
+<span class="material-symbols-outlined text-[28px]">terminal</span>
+</div>
+<h3 class="text-headline-lg font-headline-lg mb-sm">Query Terminal</h3>
+<p class="text-body-md text-on-surface-variant mb-lg">Ask complex natural language questions across your entire institutional history. Trace the origin of any decision through layers of historical context.</p>
+<ul class="space-y-sm">
+<li class="flex items-center gap-sm text-label-sm font-label-sm text-on-surface">
+<span class="material-symbols-outlined text-primary text-[18px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                  Natural Language to Cypher translation
+                </li>
+<li class="flex items-center gap-sm text-label-sm font-label-sm text-on-surface">
+<span class="material-symbols-outlined text-primary text-[18px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                  Context-aware cross-referencing
+                </li>
+</ul>
+</div>
+<div class="md:w-1/2 w-full bg-surface-container-lowest p-lg rounded-xl border border-outline-variant/40 font-mono-data text-[13px] text-on-surface-variant">
+<div class="flex gap-sm mb-md opacity-40">
+<div class="w-2 h-2 rounded-full bg-on-surface-variant"></div>
+<div class="w-2 h-2 rounded-full bg-on-surface-variant"></div>
+<div class="w-2 h-2 rounded-full bg-on-surface-variant"></div>
+</div>
+<div class="mb-sm text-on-surface">&gt; analyze impact of Q3 architecture shift</div>
+<div class="text-tertiary mb-sm">Analyzing 1,402 knowledge nodes...</div>
+<div class="pl-md border-l-2 border-outline-variant mb-sm">
+                Determined dependency conflict in <span class="text-primary underline">Core-API-v2</span>.
+                Decision tracked to <span class="text-primary underline">ADR-102</span> (Oct 12).
+              </div>
+<div class="text-on-surface">&gt; show network path</div>
+<div class="animate-pulse h-1 w-12 bg-primary rounded-full mt-sm"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Enterprise Value Prop -->
+<section class="py-xl px-margin bg-surface-container-low border-y border-outline-variant/30">
+<div class="reveal max-w-[1440px] mx-auto text-center mb-xl">
+<h2 class="text-headline-lg font-headline-lg mb-sm">Built for Institutional Integrity</h2>
+<p class="text-on-surface-variant text-body-md">Scale without sacrificing the accuracy of your technical heritage.</p>
+</div>
+<div class="max-w-[1440px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-xl">
+<div class="reveal text-center p-lg">
+<div class="inline-flex w-16 h-16 items-center justify-center rounded-full bg-surface-container-highest mb-lg border border-outline-variant shadow-lg">
+<span class="material-symbols-outlined text-on-surface text-[32px]">shield_lock</span>
+</div>
+<h4 class="text-headline-md font-headline-md mb-xs">Bank-Grade Security</h4>
+<p class="text-on-surface-variant text-label-sm font-label-sm">End-to-end encryption with on-prem deployment options for highly sensitive institutional data.</p>
+</div>
+<div class="reveal s1 text-center p-lg">
+<div class="inline-flex w-16 h-16 items-center justify-center rounded-full bg-surface-container-highest mb-lg border border-outline-variant shadow-lg">
+<span class="material-symbols-outlined text-on-surface text-[32px]">database</span>
+</div>
+<h4 class="text-headline-md font-headline-md mb-xs">Infinite Scalability</h4>
+<p class="text-on-surface-variant text-label-sm font-label-sm">Our vector-graph architecture handles millions of nodes without performance degradation as your archive grows.</p>
+</div>
+<div class="reveal s2 text-center p-lg">
+<div class="inline-flex w-16 h-16 items-center justify-center rounded-full bg-surface-container-highest mb-lg border border-outline-variant shadow-lg">
+<span class="material-symbols-outlined text-on-surface text-[32px]">history_edu</span>
+</div>
+<h4 class="text-headline-md font-headline-md mb-xs">Verifiable Integrity</h4>
+<p class="text-on-surface-variant text-label-sm font-label-sm">Immutable audit logs for every knowledge ingestion and modification, ensuring absolute trust in your records.</p>
+</div>
+</div>
+</section>
+<!-- Final CTA Section -->
+<section class="py-[120px] px-margin relative overflow-hidden">
+<div class="absolute inset-0 bg-primary/10 -skew-y-3 translate-y-20"></div>
+<div class="reveal relative z-10 max-w-4xl mx-auto text-center glass-card p-xl rounded-[40px] border-primary/20 shadow-2xl">
+<h2 class="text-display font-display mb-md">Future-proof your institutional intelligence</h2>
+<p class="text-body-lg text-on-surface-variant mb-xl max-w-2xl mx-auto">Join the world's most innovative enterprises in building a searchable, visual, and permanent memory of every strategic decision.</p>
+<button class="go-app cta-press bg-primary text-on-primary px-xl py-md rounded-xl text-label-sm font-label-sm font-bold shadow-2xl shadow-primary/40 hover:scale-105 active:scale-95 transition-all">
+          Request Enterprise Access
+        </button>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="full-width bottom-0 bg-surface-container-low dark:bg-surface-container-low border-t border-outline-variant/20">
+<div class="flex flex-col md:flex-row justify-between items-center py-xl px-margin max-w-[1440px] mx-auto gap-lg">
+<div class="flex flex-col items-center md:items-start gap-sm">
+<div class="text-headline-md font-headline-md text-on-surface dark:text-on-surface">DecisionGraph</div>
+<p class="text-body-md font-body-md text-on-surface-variant dark:text-on-surface-variant text-center md:text-left">© 2024 DecisionGraph OS. Institutional Integrity, Reinforced.</p>
+</div>
+<div class="flex flex-wrap justify-center gap-xl">
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary underline transition-all text-label-sm font-label-sm" href="#">Privacy Policy</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary underline transition-all text-label-sm font-label-sm" href="#">Terms of Service</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary underline transition-all text-label-sm font-label-sm" href="#">Compliance</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary underline transition-all text-label-sm font-label-sm" href="#">Contact</a>
+</div>
+<div class="flex gap-md">
+<a class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">public</span>
+</a>
+<a class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">hub</span>
+</a>
+</div>
+</div>
+</footer>
+
+<script>
+  // ── enter the app: graceful fade-out then navigate to the SPA ──────────────
+  function enterApp(){
+    document.body.classList.add("leaving");
+    setTimeout(function(){ window.location.href = "/app"; }, 420);
+  }
+  document.querySelectorAll(".go-app").forEach(function(el){
+    el.style.cursor = "pointer";
+    el.addEventListener("click", function(e){ e.preventDefault(); enterApp(); });
+  });
+
+  // ── scroll-reveal: sections/cards rise in as they enter the viewport ───────
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var els = document.querySelectorAll(".reveal");
+  if (reduced || !("IntersectionObserver" in window)) {
+    els.forEach(function(el){ el.classList.add("in"); });
+  } else {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if (en.isIntersecting){ en.target.classList.add("in"); io.unobserve(en.target); }
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
+    els.forEach(function(el){ io.observe(el); });
+  }
+</script>
+</body></html>

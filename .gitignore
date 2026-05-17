@@ -1,0 +1,52 @@
+# ─── SECRETS — never commit ───────────────────────────────
+.dg_credentials.json
+.dg_admin_token
+.env
+.env.*
+!.env.example
+credentials.json
+token.json
+*.key
+*.pem
+
+# ─── per-workspace & runtime data (bulky / regenerable / may contain user content) ───
+storage/
+*.pkl
+*.db
+*.sqlite
+*.sqlite3
+
+# ─── logs ───
+*.log
+server.log
+server_err.log
+ngrok*.log
+mflite*.log
+cf*.log
+cflogin*.log
+
+# ─── python ───
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# ─── node ───
+node_modules/
+
+# ─── os / editor ───
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# ─── temp build artifacts ───
+_make_deck.js
+_qa_deck.py
+_cleanup_jobs.py
+_inspect_jobs.py
+*.tmp

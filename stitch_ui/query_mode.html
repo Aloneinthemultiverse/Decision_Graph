@@ -1,0 +1,341 @@
+﻿<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DecisionGraph - Query Terminal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=IBM+Plex+Sans:wght@500&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline-variant": "#474554",
+                        "on-secondary-container": "#003e3e",
+                        "surface-dim": "#13121b",
+                        "surface": "#13121b",
+                        "tertiary-fixed": "#71fcb6",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary-fixed": "#002112",
+                        "surface-bright": "#3a3841",
+                        "on-primary-fixed-variant": "#4228bb",
+                        "surface-container-high": "#2a2932",
+                        "on-primary-fixed": "#180065",
+                        "on-error": "#690005",
+                        "on-surface": "#e5e0ed",
+                        "inverse-surface": "#e5e0ed",
+                        "inverse-on-surface": "#312f38",
+                        "surface-tint": "#c7bfff",
+                        "on-background": "#e5e0ed",
+                        "on-secondary": "#003737",
+                        "surface-container-highest": "#35343d",
+                        "primary": "#c7bfff",
+                        "outline": "#928ea0",
+                        "primary-fixed-dim": "#c7bfff",
+                        "on-primary-container": "#25008c",
+                        "surface-container-low": "#1c1b23",
+                        "error": "#ffb4ab",
+                        "secondary-fixed-dim": "#4ddada",
+                        "inverse-primary": "#5a46d3",
+                        "primary-container": "#8e7fff",
+                        "on-tertiary-container": "#00311d",
+                        "tertiary": "#51df9c",
+                        "primary-fixed": "#e4deff",
+                        "on-primary": "#2b009e",
+                        "error-container": "#93000a",
+                        "on-secondary-fixed": "#002020",
+                        "tertiary-fixed-dim": "#51df9c",
+                        "background": "#13121b",
+                        "surface-container-lowest": "#0e0d15",
+                        "on-secondary-fixed-variant": "#004f50",
+                        "on-tertiary-fixed-variant": "#005233",
+                        "secondary": "#4ddada",
+                        "on-surface-variant": "#c9c4d7",
+                        "secondary-container": "#00b3b3",
+                        "secondary-fixed": "#6ff7f6",
+                        "on-tertiary": "#003822",
+                        "surface-container": "#201f27",
+                        "tertiary-container": "#00a56b",
+                        "surface-variant": "#35343d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "xs": "4px",
+                        "margin": "32px",
+                        "xl": "40px",
+                        "gutter": "24px",
+                        "md": "16px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "display": ["Inter"],
+                        "label-sm": ["IBM Plex Sans"],
+                        "headline-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "mono-data": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-sm": ["13px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "mono-data": ["14px", {"lineHeight": "1.4", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #13121b;
+        }
+        .segmented-control-active {
+            background: rgba(142, 127, 255, 0.15);
+            border-bottom: 2px solid #c7bfff;
+        }
+        .luminous-card {
+            background: #161b22;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+    </style>
+</head>
+<body class="font-body-md text-on-surface overflow-hidden">
+<div class="flex h-screen w-full">
+<!-- SideNavBar Anchor -->
+<aside class="flex flex-col h-full p-md space-y-md border-r border-outline-variant bg-surface fixed left-0 h-screen w-[280px]">
+<div class="flex items-center gap-md px-xs pb-md">
+<div class="w-10 h-10 bg-primary-container rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container" style="font-variation-settings: 'FILL' 1;">hub</span>
+</div>
+<div>
+<h1 class="font-display text-headline-md font-black text-primary leading-tight">DecisionGraph</h1>
+<p class="text-[10px] tracking-widest uppercase text-outline">Institutional Memory OS</p>
+</div>
+</div>
+<button class="w-full py-md px-lg bg-primary text-on-primary font-bold rounded-xl flex items-center justify-center gap-sm cursor-pointer active:scale-[0.98] transition-all duration-200 shadow-lg shadow-primary/10">
+<span class="material-symbols-outlined">add_circle</span>
+                New Analysis
+            </button>
+<nav class="flex-1 space-y-xs pt-md">
+<div class="flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer active:scale-[0.98] transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="database">database</span>
+<span class="font-body-md">Knowledge Base</span>
+</div>
+<div class="flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer active:scale-[0.98] transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="forum">forum</span>
+<span class="font-body-md">Discussion</span>
+</div>
+<!-- Active Navigation: Query -->
+<div class="flex items-center gap-md bg-secondary-container text-on-secondary-container rounded-xl p-md border-l-4 border-primary cursor-pointer active:scale-[0.98] transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="search" style="font-variation-settings: 'FILL' 1;">search</span>
+<span class="font-body-md font-semibold">Query</span>
+</div>
+<div class="flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer active:scale-[0.98] transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="hub">hub</span>
+<span class="font-body-md">Graph Visualizer</span>
+</div>
+</nav>
+<div class="pt-md border-t border-outline-variant space-y-xs">
+<div class="flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer transition-all">
+<span class="material-symbols-outlined" data-icon="settings_input_component">settings_input_component</span>
+<span class="text-body-md">LLM Settings</span>
+</div>
+<div class="flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer transition-all">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="text-body-md">System Status</span>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-[280px] flex-1 flex flex-col h-full bg-surface-dim relative overflow-y-auto">
+<!-- TopAppBar Anchor -->
+<header class="flex justify-between items-center px-margin py-sm w-full bg-surface-container-low border-b border-outline-variant sticky top-0 z-30">
+<div class="flex items-center gap-xl">
+<div class="flex gap-lg items-center h-full">
+<span class="text-on-surface-variant hover:text-on-surface cursor-pointer font-body-md">Knowledge Base</span>
+<span class="text-on-surface-variant hover:text-on-surface cursor-pointer font-body-md">Discussion</span>
+<span class="text-primary border-b-2 border-primary pb-1 font-body-md font-semibold">Query</span>
+<span class="text-on-surface-variant hover:text-on-surface cursor-pointer font-body-md">Graph Visualizer</span>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-on-surface-variant p-sm hover:bg-surface-container-highest rounded-full cursor-pointer transition-colors" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined text-on-surface-variant p-sm hover:bg-surface-container-highest rounded-full cursor-pointer transition-colors" data-icon="settings">settings</span>
+<div class="w-8 h-8 rounded-full bg-outline-variant flex items-center justify-center text-xs font-bold text-on-surface overflow-hidden">
+<img alt="Admin" data-alt="A close-up professional headshot of a corporate administrator in a high-tech office setting. The lighting is sophisticated and directional, highlighting facial features with a cool blue and deep charcoal color palette that matches the premium technical enterprise interface. The background is softly blurred with hints of glowing server rack indicators." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6eUxSHVHtzx9TMjmsAhjsyCDkJoqZFOg36HpS-EsBTS9lILOWeNdUiFN7qy_a7UagKZvEAJ8pJqLB6LgXs6f2nhwiE76iilUJhD8DAcf324qy9rGpqOLJGvVx_23imtLr8UgWDxWnwBm6sNw_W9WeO-l-UBaofJZjStoup6xYZBKZmJKd0UlYOWBzCJfCe3QyCRr4tjcdmTJpy_7kDg8dl5TzDuiKBz4H14IjQaowyAn_HrNDBN5uerJfGLpbCMyrDLGKBzuNQ_8g"/>
+</div>
+</div>
+</header>
+<div class="p-margin max-w-6xl mx-auto w-full space-y-xl">
+<!-- Query Input Section -->
+<section class="space-y-lg">
+<div class="space-y-sm">
+<h2 class="font-display text-headline-lg font-bold">Query Terminal</h2>
+<p class="text-on-surface-variant">Ask complex questions across your institutional memory graph.</p>
+</div>
+<div class="luminous-card rounded-xl p-lg space-y-lg shadow-2xl">
+<div class="relative group">
+<textarea class="w-full bg-surface-container-lowest border-2 border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-xl p-lg font-body-lg text-on-surface min-h-[120px] transition-all resize-none" placeholder="Enter your question here...">What are the main risks associated with the 2024 hiring plan?</textarea>
+<div class="absolute right-md bottom-md flex gap-sm">
+<span class="text-xs text-outline font-mono-data px-sm py-1 bg-surface-container rounded">CMD + ENTER</span>
+</div>
+</div>
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-lg">
+<div class="flex items-center bg-surface-container-highest p-xs rounded-full border border-outline-variant">
+<button class="px-lg py-sm rounded-full text-label-sm font-bold text-on-surface-variant hover:text-on-surface transition-all">NORMAL</button>
+<button class="px-lg py-sm rounded-full text-label-sm font-bold text-on-surface-variant hover:text-on-surface transition-all">SESSION</button>
+<button class="px-lg py-sm rounded-full text-label-sm font-bold bg-primary text-on-primary transition-all shadow-md">DEEP</button>
+</div>
+<button class="bg-primary text-on-primary px-xl py-md rounded-xl font-bold flex items-center gap-sm hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">bolt</span>
+                                Query DecisionGraph
+                            </button>
+</div>
+</div>
+</section>
+<!-- Results Section -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Main Answer Column -->
+<div class="lg:col-span-8 space-y-lg">
+<div class="luminous-card rounded-xl overflow-hidden">
+<div class="px-lg py-md bg-surface-container-high border-b border-outline-variant flex justify-between items-center">
+<span class="font-label-sm uppercase tracking-widest text-primary font-bold">Synthesized Answer</span>
+<div class="flex gap-sm">
+<span class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer text-sm" data-icon="content_copy">content_copy</span>
+<span class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer text-sm" data-icon="share">share</span>
+</div>
+</div>
+<div class="p-lg space-y-md font-body-md text-on-surface leading-relaxed">
+<p>Analysis of 14 interconnected documents identifies three primary risk vectors for the <strong>2024 hiring plan</strong>:</p>
+<ul class="space-y-md list-none">
+<li class="flex gap-md">
+<div class="w-1 h-auto bg-error rounded-full"></div>
+<div>
+<strong class="text-error">Budgetary Drift:</strong> Current projections exceed the Q1 allocation by 12.4%. This mirrors the 2023 Hiring Freeze event where recruitment was halted due to similar variance.
+                                        </div>
+</li>
+<li class="flex gap-md">
+<div class="w-1 h-auto bg-secondary rounded-full"></div>
+<div>
+<strong class="text-secondary">Onboarding Bottleneck:</strong> The velocity of technical hires outpaces current HR bandwidth in the EMEA region, potentially leading to a 3-week delay in integration per cohort.
+                                        </div>
+</li>
+<li class="flex gap-md">
+<div class="w-1 h-auto bg-tertiary rounded-full"></div>
+<div>
+<strong class="text-tertiary">Strategic Alignment:</strong> 4 out of 12 department heads have yet to confirm headcount priorities against the 'AI-First' mandate of FY24.
+                                        </div>
+</li>
+</ul>
+</div>
+</div>
+<!-- Thought Process -->
+<div class="border border-outline-variant rounded-xl bg-surface-container-lowest">
+<details class="group">
+<summary class="p-lg flex items-center justify-between cursor-pointer list-none">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-secondary" data-icon="neurology">neurology</span>
+<span class="font-label-sm font-bold uppercase tracking-widest text-on-surface-variant">Reasoning Summary &amp; Thought Process</span>
+</div>
+<span class="material-symbols-outlined transition-transform group-open:rotate-180 text-outline">expand_more</span>
+</summary>
+<div class="px-lg pb-lg text-on-surface-variant space-y-md border-t border-outline-variant/30 pt-md">
+<div class="flex items-start gap-md">
+<span class="font-mono-data text-xs py-1 px-sm bg-surface-container rounded text-primary">01</span>
+<p class="text-body-md">Extracted entities: <span class="text-on-surface">"2024 hiring plan"</span>, <span class="text-on-surface">"risks"</span>, <span class="text-on-surface">"HR policy"</span>.</p>
+</div>
+<div class="flex items-start gap-md">
+<span class="font-mono-data text-xs py-1 px-sm bg-surface-container rounded text-primary">02</span>
+<p class="text-body-md">Traversed graph via <span class="italic">Temporal Links</span> to 2023 Fiscal Overruns. Identified high-weight connections between <span class="text-on-surface">#Budget</span> and <span class="text-on-surface">#Recruitment</span>.</p>
+</div>
+<div class="flex items-start gap-md">
+<span class="font-mono-data text-xs py-1 px-sm bg-surface-container rounded text-primary">03</span>
+<p class="text-body-md">Triangulated sentiment from latest CFO Memo and Regional HR dashboards.</p>
+</div>
+</div>
+</details>
+</div>
+</div>
+<!-- Sidebar / Context Column -->
+<div class="lg:col-span-4 space-y-lg">
+<!-- Communities -->
+<div class="space-y-md">
+<h3 class="font-label-sm font-bold text-outline uppercase tracking-wider">Communities Traversed</h3>
+<div class="flex flex-wrap gap-sm">
+<span class="px-md py-sm bg-primary/10 text-primary border border-primary/20 rounded-lg text-xs font-bold flex items-center gap-xs">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+                                    #HR
+                                </span>
+<span class="px-md py-sm bg-secondary/10 text-secondary border border-secondary/20 rounded-lg text-xs font-bold flex items-center gap-xs">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+                                    #Finance
+                                </span>
+<span class="px-md py-sm bg-tertiary/10 text-tertiary border border-tertiary/20 rounded-lg text-xs font-bold flex items-center gap-xs">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+                                    #StrategicPlanning
+                                </span>
+</div>
+</div>
+<!-- Past Decisions List -->
+<div class="space-y-md">
+<h3 class="font-label-sm font-bold text-outline uppercase tracking-wider">Related Past Decisions</h3>
+<div class="space-y-sm">
+<!-- Decision Card 1 -->
+<div class="luminous-card p-md rounded-xl hover:border-primary/50 cursor-pointer transition-all group">
+<div class="flex justify-between items-start mb-xs">
+<span class="font-mono-data text-[10px] text-primary">Similarity 0.92</span>
+<span class="text-[10px] text-outline">MAR 2023</span>
+</div>
+<h4 class="font-body-md font-bold text-on-surface group-hover:text-primary transition-colors">Hiring Freeze Q2 2023</h4>
+<p class="text-xs text-on-surface-variant line-clamp-2 mt-xs">Resolution to halt all non-essential recruitment due to macroeconomic variance.</p>
+</div>
+<!-- Decision Card 2 -->
+<div class="luminous-card p-md rounded-xl hover:border-primary/50 cursor-pointer transition-all group">
+<div class="flex justify-between items-start mb-xs">
+<span class="font-mono-data text-[10px] text-primary">Similarity 0.78</span>
+<span class="text-[10px] text-outline">NOV 2023</span>
+</div>
+<h4 class="font-body-md font-bold text-on-surface group-hover:text-primary transition-colors">Recruitment Budget Expansion</h4>
+<p class="text-xs text-on-surface-variant line-clamp-2 mt-xs">FY24 initial allocation approval with strict milestones for AI division.</p>
+</div>
+</div>
+</div>
+<!-- Evidence Graph Hint -->
+<div class="luminous-card rounded-xl aspect-square relative overflow-hidden flex flex-col items-center justify-center p-lg text-center gap-md">
+<img class="absolute inset-0 w-full h-full object-cover opacity-20 grayscale" data-alt="A complex network graph visualization with nodes and shimmering data points connected by thin luminous lines. The aesthetic is deep navy and neon purple, representing a digital neural network or an enterprise knowledge graph in dark mode. Soft light glows emanate from key decision nodes, creating a sense of technical depth and high-fidelity data structures." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBzGxMAvFx9AOq0bvE0ER2dXnCYuPU495NRvlEeWJ_gvlZbaf-DAsQ5ttKlsnfJJsRpgQbN_O0Da97E83T0DC_9fxEto6RiVAh44UtHtjohUPe1Rl13sJsGbPm0QVOAhfenhseAHZIN_Xddg4uNcFwypjtYQ_EC9Ow2g2NXMwTanqrh2qbr2wO4JzgDSUHoVtCAskSWjHhQISFT9m7tclsZ8z3kIsyJYlDitYYBze1u9VAs6Ir-EE9B6HvjCL_DyiC2YgvB3yRUOPJV"/>
+<span class="material-symbols-outlined text-4xl text-primary z-10" data-icon="hub">hub</span>
+<div class="z-10">
+<h4 class="font-bold text-on-surface">Explore Sub-Graph</h4>
+<p class="text-xs text-on-surface-variant px-md">Visualize the specific connections used to generate this answer.</p>
+</div>
+<button class="z-10 bg-surface-container-highest border border-outline-variant px-lg py-sm rounded-full text-xs font-bold hover:bg-surface-container-high transition-all">Launch Visualizer</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Global Search Overlay Button (FAB) -->
+<div class="fixed bottom-margin right-margin flex flex-col items-end gap-md">
+<button class="w-14 h-14 bg-primary rounded-full shadow-2xl flex items-center justify-center text-on-primary hover:scale-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">question_answer</span>
+</button>
+</div>
+</main>
+</div>
+</body></html>

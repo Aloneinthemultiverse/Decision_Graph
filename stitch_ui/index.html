@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DecisionGraph — Institutional Memory OS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script>
+tailwind.config = {
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        "outline-variant":"#474554","surface-dim":"#13121b","surface":"#13121b",
+        "tertiary-fixed":"#71fcb6","on-error-container":"#ffdad6",
+        "surface-bright":"#3a3841","on-primary-fixed-variant":"#4228bb",
+        "surface-container-high":"#2a2932","on-primary-fixed":"#180065",
+        "on-surface":"#e5e0ed","on-secondary-container":"#003e3e",
+        "surface-container-highest":"#35343d","primary":"#c7bfff",
+        "outline":"#928ea0","on-primary-container":"#25008c",
+        "surface-container-low":"#1c1b23","error":"#ffb4ab",
+        "primary-container":"#8e7fff","on-tertiary-container":"#00311d",
+        "tertiary":"#51df9c","on-primary":"#2b009e","error-container":"#93000a",
+        "background":"#13121b","surface-container-lowest":"#0e0d15",
+        "secondary":"#4ddada","on-surface-variant":"#c9c4d7",
+        "secondary-container":"#00b3b3","on-tertiary":"#003822",
+        "surface-container":"#201f27","tertiary-container":"#00a56b",
+        "surface-variant":"#35343d"
+      },
+      borderRadius:{DEFAULT:"0.125rem",lg:"0.25rem",xl:"0.5rem",full:"0.75rem"},
+      spacing:{sm:"8px",xs:"4px",margin:"32px",xl:"40px",gutter:"24px",md:"16px",lg:"24px"},
+      fontFamily:{display:["Inter"],"label-sm":["IBM Plex Sans"],"mono-data":["JetBrains Mono"]},
+      fontSize:{
+        display:["48px",{lineHeight:"1.1",letterSpacing:"-0.02em",fontWeight:"700"}],
+        "label-sm":["13px",{lineHeight:"1",letterSpacing:"0.05em",fontWeight:"500"}],
+        "headline-md":["24px",{lineHeight:"1.3",fontWeight:"600"}],
+        "body-lg":["18px",{lineHeight:"1.6",fontWeight:"400"}],
+        "body-md":["16px",{lineHeight:"1.5",fontWeight:"400"}],
+        "headline-lg":["32px",{lineHeight:"1.2",letterSpacing:"-0.01em",fontWeight:"600"}],
+        "mono-data":["14px",{lineHeight:"1.4",fontWeight:"400"}]
+      }
+    }
+  }
+}
+</script>
+<style>
+.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;vertical-align:middle;}
+.filled{font-variation-settings:'FILL' 1;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:#13121b;}
+::-webkit-scrollbar-thumb{background:#474554;border-radius:10px;}
+::-webkit-scrollbar-thumb:hover{background:#928ea0;}
+.scrollbar-hide::-webkit-scrollbar{display:none;}
+.fade-in{animation:fadeIn .3s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+@keyframes pulse-dot{0%,100%{opacity:.4;}50%{opacity:1;}}
+.dot-pulse>span{display:inline-block;width:6px;height:6px;background:#c7bfff;border-radius:50%;margin:0 2px;animation:pulse-dot 1s infinite;}
+.dot-pulse>span:nth-child(2){animation-delay:.2s;}
+.dot-pulse>span:nth-child(3){animation-delay:.4s;}
+.luminous{background:#161b22;border:1px solid rgba(255,255,255,.08);}
+.tab-active{background:#003e3e;color:#4ddada;border-left:4px solid #c7bfff;}
+.btn-primary{background:#c7bfff;color:#2b009e;font-weight:700;}
+.btn-primary:hover{filter:brightness(1.1);}
+.section{display:none!important;}
+.section.active{display:block!important;}
+.chat-bubble-agent{border-left:4px solid #51df9c;}
+#graphCanvas{height:560px;background:#0e0d15;border-radius:16px;border:1px solid #474554;}
+.toast{position:fixed;bottom:20px;right:20px;padding:12px 18px;border-radius:8px;z-index:1000;font-weight:600;animation:fadeIn .2s;}
+.toast.ok{background:#00a56b;color:#fff;}
+.toast.err{background:#93000a;color:#fff;}
+</style>
+</head>
+<body class="bg-background text-on-surface font-display min-h-screen flex overflow-hidden" style="font-family:Inter;">
+
+<!-- (login overlay removed — LLM is server-managed; each visitor gets an
+     isolated workspace automatically) -->
+
+<!-- ═════════════ SIDEBAR ═════════════ -->
+<aside class="fixed left-0 h-screen w-[280px] bg-surface flex flex-col p-md gap-md border-r border-outline-variant z-40">
+  <div class="flex items-center gap-md px-sm">
+    <div class="w-10 h-10 bg-primary-container rounded-xl flex items-center justify-center">
+      <span class="material-symbols-outlined filled text-on-primary-container">hub</span>
+    </div>
+    <div>
+      <h1 class="font-display text-headline-md font-black text-primary leading-none">DecisionGraph</h1>
+      <p class="text-[10px] uppercase tracking-widest text-outline mt-1">Institutional Memory OS</p>
+    </div>
+  </div>
+
+  <nav class="flex-1 space-y-xs mt-md">
+    <a data-route="kb"        onclick="route('kb')"        class="nav-item flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer transition-all"><span class="material-symbols-outlined">database</span><span>Knowledge Base</span></a>
+    <a data-route="discussion" onclick="route('discussion')" class="nav-item flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer transition-all"><span class="material-symbols-outlined">forum</span><span>Discussion</span></a>
+    <a data-route="query"     onclick="route('query')"     class="nav-item flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer transition-all"><span class="material-symbols-outlined">search</span><span>Query</span></a>
+    <a data-route="brain"     onclick="route('brain')"     class="nav-item flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer transition-all"><span class="material-symbols-outlined">neurology</span><span>Brain</span></a>
+    <a data-route="graph"     onclick="route('graph')"     class="nav-item flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer transition-all"><span class="material-symbols-outlined">hub</span><span>Graph Visualizer</span></a>
+    <a data-route="integrations" onclick="route('integrations')" class="nav-item flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer transition-all"><span class="material-symbols-outlined">cable</span><span>Integrations</span></a>
+    <a data-route="mcp" onclick="route('mcp')" class="nav-item flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer transition-all"><span class="material-symbols-outlined">api</span><span>MCP Server</span></a>
+    <a data-route="simulation" onclick="route('simulation')" class="nav-item flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer transition-all"><span class="material-symbols-outlined">science</span><span>Simulation Studio</span></a>
+  </nav>
+
+  <div class="pt-md border-t border-outline-variant">
+    <div class="flex items-center gap-sm px-sm mb-sm text-on-surface-variant">
+      <span class="material-symbols-outlined text-[18px]">analytics</span>
+      <span class="text-label-sm uppercase tracking-wider">System Status</span>
+    </div>
+    <div class="grid grid-cols-2 gap-sm">
+      <div class="bg-surface-container-high p-sm rounded-lg"><p class="text-[10px] text-on-surface-variant uppercase">Nodes</p><p id="stNodes" class="font-mono-data text-primary text-lg">0</p></div>
+      <div class="bg-surface-container-high p-sm rounded-lg"><p class="text-[10px] text-on-surface-variant uppercase">Edges</p><p id="stEdges" class="font-mono-data text-secondary text-lg">0</p></div>
+      <div class="bg-surface-container-high p-sm rounded-lg"><p class="text-[10px] text-on-surface-variant uppercase">Comm.</p><p id="stComms" class="font-mono-data text-tertiary text-lg">0</p></div>
+      <div class="bg-surface-container-high p-sm rounded-lg"><p class="text-[10px] text-on-surface-variant uppercase">Decisions</p><p id="stDecs" class="font-mono-data text-on-surface text-lg">0</p></div>
+    </div>
+    <!-- Your private, isolated workspace -->
+    <div class="mt-md pt-sm border-t border-outline-variant">
+      <div class="flex items-center gap-xs mb-xs">
+        <span class="material-symbols-outlined text-tertiary text-[16px]">lock</span>
+        <span class="text-xs font-bold text-on-surface">Your private workspace</span>
+      </div>
+      <div class="text-[10px] text-on-surface-variant leading-relaxed">
+        Everything you build here is isolated to you — no one else can see your
+        graph, decisions, or sessions.
+      </div>
+      <div class="mt-xs flex items-center gap-xs">
+        <span class="text-[10px] text-outline">ID</span>
+        <code id="wsBadge" class="text-[10px] font-mono-data text-tertiary bg-surface-container-lowest px-xs py-[2px] rounded">—</code>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ═════════════ MAIN ═════════════ -->
+<main class="ml-[280px] flex-1 flex flex-col h-screen overflow-hidden bg-surface-dim">
+
+<!-- top bar -->
+<header class="flex justify-between items-center px-margin py-sm w-full bg-surface-container-low border-b border-outline-variant">
+  <h2 id="topTitle" class="font-display text-headline-md text-on-surface">Knowledge Base</h2>
+  <div class="flex items-center gap-md text-on-surface-variant text-sm font-mono-data">
+    <span id="topModel">—</span>
+  </div>
+</header>
+
+<div class="flex-1 overflow-y-auto p-margin">
+
+<!-- ═════════════ KB SECTION ═════════════ -->
+<section id="sec-kb" class="section active fade-in space-y-xl">
+  <header>
+    <h3 class="font-display text-headline-lg text-on-surface mb-xs">Knowledge Base</h3>
+    <p class="text-on-surface-variant max-w-2xl">Ingest documents to build your institutional knowledge graph. The LLM extracts triples, detects communities, and indexes everything for fast retrieval.</p>
+  </header>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
+    <!-- personal KG -->
+    <div class="bg-surface-container-low border border-outline-variant rounded-xl p-lg flex flex-col relative">
+      <div class="absolute top-0 left-0 w-1 h-full bg-tertiary"></div>
+      <div class="flex justify-between items-start mb-md">
+        <div><h4 class="text-headline-md">Personal Knowledge Graph</h4><p class="text-on-surface-variant italic text-sm">Research papers, books, technical docs</p></div>
+        <div class="bg-tertiary-container/20 text-tertiary p-sm rounded-lg"><span class="material-symbols-outlined filled">school</span></div>
+      </div>
+      <label for="kbPersonalFiles" class="flex flex-col justify-center items-center border-2 border-dashed border-outline-variant rounded-xl p-xl bg-surface/50 hover:border-tertiary/50 transition-all cursor-pointer mb-md">
+        <span class="material-symbols-outlined text-tertiary text-[48px] mb-sm">upload_file</span>
+        <p class="font-semibold">Drop files to augment graph</p>
+        <p class="text-on-surface-variant text-sm">PDF · TXT · MD · DOCX · CSV · XLSX</p>
+      </label>
+      <input id="kbPersonalFiles" type="file" multiple accept=".pdf,.txt,.md,.docx,.csv,.xlsx,.xls,.eml" class="hidden" onchange="updateFileList('kbPersonalFiles','kbPersonalList')"/>
+      <div id="kbPersonalList" class="space-y-xs"></div>
+      <button onclick="ingestPersonal()" id="kbPersonalBtn" class="mt-md btn-primary py-sm rounded-xl flex items-center justify-center gap-sm">
+        <span class="material-symbols-outlined text-[18px]">bolt</span>Build Knowledge Graph
+      </button>
+      <div id="kbPersonalProgress" class="hidden mt-md"><div class="text-tertiary text-xs font-bold animate-pulse">Ingesting…</div></div>
+
+      <!-- No files? Pull knowledge from the web / media -->
+      <div class="mt-lg pt-md border-t border-outline-variant space-y-sm">
+        <div class="text-[11px] uppercase tracking-wider text-outline">No files? Build from the web or media</div>
+        <div class="flex gap-sm">
+          <input id="kbUrl" placeholder="https://… any article / docs page" class="flex-1 bg-surface-container-lowest border border-outline-variant focus:border-tertiary rounded-lg px-md py-sm text-sm focus:outline-none"/>
+          <button onclick="ingestUrl()" id="kbUrlBtn" class="bg-tertiary/15 text-tertiary border border-tertiary/30 px-md rounded-lg text-sm hover:bg-tertiary/25 whitespace-nowrap">Scrape</button>
+        </div>
+        <div class="flex gap-sm">
+          <input id="kbYt" placeholder="https://youtube.com/watch?v=…  (uses transcript)" class="flex-1 bg-surface-container-lowest border border-outline-variant focus:border-tertiary rounded-lg px-md py-sm text-sm focus:outline-none"/>
+          <button onclick="ingestYoutube()" id="kbYtBtn" class="bg-tertiary/15 text-tertiary border border-tertiary/30 px-md rounded-lg text-sm hover:bg-tertiary/25 whitespace-nowrap">YouTube</button>
+        </div>
+        <div id="kbMediaWrap" class="hidden">
+          <label for="kbMedia" class="flex items-center gap-sm border border-dashed border-outline-variant rounded-lg px-md py-sm text-sm cursor-pointer hover:border-tertiary/50">
+            <span class="material-symbols-outlined text-[18px] text-tertiary">graphic_eq</span>
+            <span id="kbMediaLbl">Audio / video → transcribed by Gemini → graph</span>
+          </label>
+          <input id="kbMedia" type="file" accept="audio/*,video/*" class="hidden" onchange="ingestMedia()"/>
+        </div>
+        <div id="kbWebStatus" class="text-xs text-on-surface-variant"></div>
+      </div>
+    </div>
+
+    <!-- company memory -->
+    <div class="bg-surface-container-low border border-outline-variant rounded-xl p-lg flex flex-col relative">
+      <div class="absolute top-0 left-0 w-1 h-full bg-secondary"></div>
+      <div class="flex justify-between items-start mb-md">
+        <div><h4 class="text-headline-md">Company Memory</h4><p class="text-on-surface-variant italic text-sm">Multi-tenant — meeting notes, financials, policies</p></div>
+        <div class="bg-secondary-container/20 text-secondary p-sm rounded-lg"><span class="material-symbols-outlined filled">corporate_fare</span></div>
+      </div>
+      <div class="mb-md">
+        <label class="text-[10px] uppercase tracking-widest text-on-surface-variant block mb-xs">Workspace</label>
+        <div class="flex gap-sm">
+          <select id="kbCompanySelect" onchange="onCompanyChange()" class="flex-1 bg-surface-container-highest border border-outline-variant rounded-lg px-md py-sm text-on-surface focus:outline-none focus:border-secondary">
+            <option value="">— Select / Create —</option>
+          </select>
+          <button onclick="showCreateCompany()" class="px-md bg-secondary-container/20 text-secondary rounded-lg hover:bg-secondary/20 transition"><span class="material-symbols-outlined text-[20px]">add</span></button>
+        </div>
+        <div id="newCompanyForm" class="hidden mt-sm space-y-sm">
+          <input id="newCoId" placeholder="slug (e.g. acme)" class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm text-sm font-mono-data focus:outline-none focus:border-secondary"/>
+          <input id="newCoName" placeholder="Display name" class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm text-sm focus:outline-none focus:border-secondary"/>
+          <button onclick="createCompany()" class="w-full btn-primary py-sm rounded-lg text-sm">Create</button>
+        </div>
+      </div>
+      <label for="kbCompanyFiles" class="flex flex-col justify-center items-center border-2 border-dashed border-outline-variant rounded-xl p-lg bg-surface/50 hover:border-secondary/50 transition-all cursor-pointer mb-md">
+        <span class="material-symbols-outlined text-secondary text-[36px] mb-xs">upload_file</span>
+        <p class="text-sm font-semibold">Add to selected workspace</p>
+      </label>
+      <input id="kbCompanyFiles" type="file" multiple accept=".pdf,.txt,.md,.docx,.csv,.xlsx,.xls,.eml" class="hidden" onchange="updateFileList('kbCompanyFiles','kbCompanyList')"/>
+      <div id="kbCompanyList" class="space-y-xs"></div>
+      <button onclick="ingestCompany()" id="kbCompanyBtn" class="mt-md btn-primary py-sm rounded-xl flex items-center justify-center gap-sm disabled:opacity-50">
+        <span class="material-symbols-outlined text-[18px]">bolt</span>Ingest into Workspace
+      </button>
+      <div id="kbCompanyDocs" class="mt-md space-y-xs max-h-48 overflow-y-auto"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════ DISCUSSION SECTION ═════════════ -->
+<section id="sec-discussion" class="section fade-in">
+  <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-gutter h-[calc(100vh-130px)] overflow-hidden">
+    <!-- chat column -->
+    <div class="flex flex-col bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden">
+      <div class="px-lg py-md bg-surface-container-high border-b border-outline-variant flex justify-between items-center">
+        <div>
+          <span class="text-[10px] uppercase tracking-widest text-outline font-bold">Active Session</span>
+          <h3 id="sessTitle" class="font-display text-headline-md">No active session</h3>
+        </div>
+        <button id="sessEndBtn" onclick="endSession()" class="hidden bg-error-container text-on-error-container px-lg py-sm rounded-xl font-bold flex items-center gap-xs active:scale-95">
+          <span class="material-symbols-outlined text-[18px]">stop_circle</span>End Session
+        </button>
+      </div>
+      <div id="chatBody" class="flex-1 overflow-y-auto scrollbar-hide px-lg py-xl space-y-lg">
+        <div class="text-center text-on-surface-variant py-xl">
+          <span class="material-symbols-outlined text-[48px] text-outline">forum</span>
+          <p class="mt-md">Start a session from the right panel.</p>
+        </div>
+      </div>
+      <footer class="px-lg py-md bg-surface-container-low border-t border-outline-variant">
+        <form onsubmit="sendChat(event)" class="relative">
+          <input id="chatInput" type="text" placeholder="Type your message…" disabled
+            class="w-full bg-surface-container-high border border-outline-variant rounded-2xl px-lg py-md pr-14 text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary focus:border-transparent transition-all disabled:opacity-50"/>
+          <button id="chatSend" type="submit" disabled class="absolute right-3 top-1/2 -translate-y-1/2 bg-primary text-on-primary p-sm rounded-xl disabled:opacity-30">
+            <span class="material-symbols-outlined filled">send</span>
+          </button>
+        </form>
+      </footer>
+    </div>
+
+    <!-- side controls -->
+    <div class="space-y-md overflow-y-auto pr-xs">
+      <div class="bg-surface-container-low border border-outline-variant rounded-xl p-md">
+        <h4 class="text-label-sm uppercase tracking-wider text-outline mb-sm">New Session</h4>
+        <input id="newSessTitle" type="text" placeholder="Session title (optional)"
+          class="w-full bg-surface-container-highest border border-outline-variant rounded-lg px-md py-sm text-sm mb-sm focus:outline-none focus:border-primary"/>
+        <select id="newSessCompany" class="w-full bg-surface-container-highest border border-outline-variant rounded-lg px-md py-sm text-sm mb-sm focus:outline-none focus:border-primary">
+          <option value="">No company context</option>
+        </select>
+        <button onclick="startSession()" class="w-full btn-primary py-sm rounded-xl flex items-center justify-center gap-sm">
+          <span class="material-symbols-outlined text-[18px]">add_circle</span>Start
+        </button>
+      </div>
+      <div class="bg-surface-container-low border border-outline-variant rounded-xl p-md">
+        <h4 class="text-label-sm uppercase tracking-wider text-outline mb-sm">Past Sessions</h4>
+        <div id="pastSessions" class="space-y-sm max-h-[400px] overflow-y-auto"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════ QUERY SECTION ═════════════ -->
+<section id="sec-query" class="section fade-in space-y-xl">
+  <header>
+    <h3 class="font-display text-headline-lg text-on-surface mb-xs">Query Terminal</h3>
+    <p class="text-on-surface-variant">Ask complex questions across your institutional memory graph.</p>
+  </header>
+
+  <div class="luminous rounded-xl p-lg space-y-lg shadow-2xl">
+    <textarea id="qInput" placeholder="Enter your question here…" rows="3"
+      class="w-full bg-surface-container-lowest border-2 border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-xl p-lg text-body-lg text-on-surface min-h-[120px] resize-none focus:outline-none"></textarea>
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-md">
+      <div class="flex flex-col gap-sm">
+        <div class="flex items-center bg-surface-container-highest p-xs rounded-full border border-outline-variant">
+          <button data-mode="auto"    onclick="setMode('auto')"    class="qmode px-lg py-sm rounded-full text-label-sm font-bold text-on-surface-variant hover:text-on-surface transition">AUTO</button>
+          <button data-mode="normal"  onclick="setMode('normal')"  class="qmode px-lg py-sm rounded-full text-label-sm font-bold text-on-surface-variant hover:text-on-surface transition">NORMAL</button>
+          <button data-mode="session" onclick="setMode('session')" class="qmode px-lg py-sm rounded-full text-label-sm font-bold text-on-surface-variant hover:text-on-surface transition">SESSION</button>
+          <button data-mode="deep"    onclick="setMode('deep')"    class="qmode active px-lg py-sm rounded-full text-label-sm font-bold bg-primary text-on-primary transition shadow-md">DEEP</button>
+        </div>
+        <label class="flex items-center gap-xs text-[11px] text-on-surface-variant cursor-pointer pl-sm">
+          <input id="qHybrid" type="checkbox" class="w-3 h-3 accent-primary"/> Hybrid retrieval (vector + keyword)
+          <span id="qIntentBadge" class="hidden ml-sm px-sm py-[1px] rounded bg-secondary/15 text-secondary font-mono-data text-[10px]"></span>
+        </label>
+      </div>
+      <div class="flex gap-sm">
+        <select id="qScope" class="bg-surface-container-highest border border-outline-variant rounded-lg px-md py-sm text-sm focus:outline-none focus:border-primary">
+          <option value="">Personal Graph</option>
+        </select>
+        <button onclick="runQuery()" id="qBtn" class="btn-primary px-xl py-md rounded-xl flex items-center gap-sm active:scale-95 transition-all shadow-lg shadow-primary/20">
+          <span class="material-symbols-outlined filled">bolt</span>Query
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="qResult" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+    <div class="lg:col-span-8 space-y-lg">
+      <div class="luminous rounded-xl overflow-hidden">
+        <div class="px-lg py-md bg-surface-container-high border-b border-outline-variant flex justify-between items-center">
+          <span class="text-label-sm uppercase tracking-widest text-primary font-bold">Synthesized Answer</span>
+          <span id="qResultMode" class="text-xs font-mono-data text-on-surface-variant"></span>
+        </div>
+        <div id="qAnswer" class="p-lg text-on-surface leading-relaxed whitespace-pre-wrap"></div>
+      </div>
+    </div>
+    <div class="lg:col-span-4 space-y-lg">
+      <div>
+        <h4 class="text-label-sm uppercase tracking-wider text-outline mb-sm">Communities Traversed</h4>
+        <div id="qCommunities" class="flex flex-wrap gap-sm"></div>
+      </div>
+      <div>
+        <h4 class="text-label-sm uppercase tracking-wider text-outline mb-sm">Related Past Decisions</h4>
+        <div id="qPast" class="space-y-sm"></div>
+      </div>
+    </div>
+  </div>
+  <div id="qLoading" class="hidden text-center py-xl">
+    <div class="dot-pulse"><span></span><span></span><span></span></div>
+    <p class="text-on-surface-variant mt-md">DecisionGraph is thinking…</p>
+  </div>
+</section>
+
+<!-- ═════════════ BRAIN SECTION ═════════════ -->
+<section id="sec-brain" class="section fade-in space-y-xl">
+  <div class="flex items-center justify-between flex-wrap gap-md">
+    <div>
+      <h2 class="font-display text-headline-lg">Brain</h2>
+      <p class="text-on-surface-variant text-sm">Compiled understanding, instant recall, and self-maintenance — your institutional memory, alive.</p>
+    </div>
+    <div class="flex gap-sm flex-wrap">
+      <button onclick="runDream()" id="dreamBtn" class="btn-primary px-lg py-sm rounded-xl flex items-center gap-sm">
+        <span class="material-symbols-outlined text-[18px]">bedtime</span>Run Dream Cycle
+      </button>
+      <button onclick="exportBrain()" class="bg-surface-container-high border border-outline-variant px-lg py-sm rounded-xl text-sm flex items-center gap-sm hover:bg-surface-container-highest">
+        <span class="material-symbols-outlined text-[18px]">download</span>Export Markdown
+      </button>
+    </div>
+  </div>
+
+  <!-- Recall -->
+  <div class="luminous rounded-xl p-lg space-y-md">
+    <div class="flex items-center gap-sm"><span class="material-symbols-outlined text-tertiary">bolt</span>
+      <h3 class="font-display font-bold">Instant Recall</h3>
+      <span class="text-[11px] text-outline">no LLM · sub-second</span></div>
+    <div class="flex gap-sm">
+      <input id="recallBox" placeholder="entity, person, project, topic…" onkeydown="if(event.key==='Enter')doRecall()"
+        class="flex-1 bg-surface-container-lowest border border-outline-variant focus:border-tertiary rounded-lg px-md py-sm text-sm focus:outline-none"/>
+      <button onclick="doRecall()" class="bg-tertiary/15 text-tertiary border border-tertiary/30 px-lg rounded-lg text-sm hover:bg-tertiary/25">Recall</button>
+    </div>
+    <div id="recallOut" class="hidden space-y-sm"></div>
+  </div>
+
+  <!-- Dream report -->
+  <div id="dreamReport" class="hidden luminous rounded-xl p-lg">
+    <div class="flex items-center gap-sm mb-sm"><span class="material-symbols-outlined text-primary">bedtime</span>
+      <h3 class="font-display font-bold">Last Dream Cycle</h3></div>
+    <pre id="dreamReportBody" class="text-xs font-mono-data text-on-surface-variant whitespace-pre-wrap"></pre>
+  </div>
+
+  <!-- Compiled Truth + Timeline -->
+  <div class="luminous rounded-xl p-lg space-y-md">
+    <div class="flex items-center justify-between flex-wrap gap-sm">
+      <div class="flex items-center gap-sm"><span class="material-symbols-outlined text-secondary">menu_book</span>
+        <h3 class="font-display font-bold">Compiled Truth + Timeline</h3></div>
+      <div class="flex gap-sm">
+        <select id="ctTopic" onchange="loadCompiled()" class="bg-surface-container-highest border border-outline-variant rounded-lg px-md py-sm text-sm focus:outline-none">
+          <option value="">— pick a topic —</option>
+        </select>
+        <button onclick="recompileTopic()" id="ctRecompileBtn" class="bg-secondary/15 text-secondary border border-secondary/30 px-md py-sm rounded-lg text-sm hover:bg-secondary/25">Recompile</button>
+      </div>
+    </div>
+    <div id="ctCompiled" class="bg-surface-container-lowest border border-secondary/20 rounded-lg p-md text-sm leading-relaxed">
+      <span class="text-outline">Pick a topic to see its current best understanding.</span>
+    </div>
+    <div>
+      <div class="text-[11px] uppercase tracking-wider text-outline mb-xs">Timeline · immutable evidence (oldest → newest)</div>
+      <div id="ctTimeline" class="space-y-xs max-h-72 overflow-y-auto"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════ GRAPH SECTION ═════════════ -->
+<section id="sec-graph" class="section fade-in space-y-lg">
+  <header>
+    <h3 class="font-display text-headline-lg text-on-surface mb-xs">Graph Visualizer</h3>
+    <p class="text-on-surface-variant">Explore the structure of your knowledge graph interactively.</p>
+  </header>
+
+  <div class="flex flex-wrap items-end gap-md p-md bg-surface-container-low border border-outline-variant rounded-xl">
+    <div class="flex flex-col gap-xs flex-1 min-w-[200px]">
+      <label class="text-label-sm text-outline uppercase">Scope</label>
+      <select id="gScope" onchange="onGScopeChange()" class="bg-surface-container-high border border-outline-variant text-on-surface rounded-lg p-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="knowledge">Knowledge Graph</option>
+        <option value="decisions">Decision Memory</option>
+        <option value="companies">Company Memory</option>
+        <option value="sessions">Discussion Sessions</option>
+      </select>
+    </div>
+    <div id="gCompanyWrap" class="hidden flex flex-col gap-xs flex-1 min-w-[200px]">
+      <label class="text-label-sm text-outline uppercase">Company</label>
+      <select id="gCompany" class="bg-surface-container-high border border-outline-variant text-on-surface rounded-lg p-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="">— Overview (all companies) —</option>
+      </select>
+    </div>
+    <div class="flex flex-col gap-xs flex-1 min-w-[200px]">
+      <div class="flex justify-between"><label class="text-label-sm text-outline uppercase">Max Nodes</label><span id="gMaxLbl" class="text-mono-data text-primary">200</span></div>
+      <input id="gMax" type="range" min="30" max="1000" value="200" oninput="gMaxLbl.textContent=this.value" class="w-full accent-primary"/>
+    </div>
+    <button onclick="renderGraph()" class="btn-primary px-xl py-sm rounded-lg flex items-center gap-sm shadow-lg shadow-primary/20">
+      <span class="material-symbols-outlined">play_circle</span>Render
+    </button>
+  </div>
+
+  <div id="gWrap" class="relative">
+    <div id="graphCanvas"></div>
+    <div id="gEmpty" class="absolute inset-0 flex items-center justify-center text-on-surface-variant">
+      <div class="text-center"><span class="material-symbols-outlined text-[64px] text-outline">hub</span><p class="mt-md">Pick a scope and hit Render</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════ INTEGRATIONS SECTION ═════════════ -->
+<section id="sec-integrations" class="section fade-in space-y-xl">
+  <header>
+    <h3 class="font-display text-headline-lg text-on-surface mb-xs">Integrations</h3>
+    <p class="text-on-surface-variant">Connect external sources (input) and destinations (output) for your decision graph.</p>
+  </header>
+
+  <div class="flex gap-md flex-wrap">
+    <span class="px-md py-xs bg-tertiary/10 text-tertiary border border-tertiary/20 rounded-full text-xs font-bold">INPUT — Sources</span>
+    <span class="px-md py-xs bg-secondary/10 text-secondary border border-secondary/20 rounded-full text-xs font-bold">OUTPUT — Sinks</span>
+    <span class="px-md py-xs bg-primary/10 text-primary border border-primary/20 rounded-full text-xs font-bold">BOTH — In & Out</span>
+  </div>
+
+  <div id="integrationsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-gutter"></div>
+</section>
+
+<!-- ═════════════ MCP SERVER SECTION ═════════════ -->
+<section id="sec-mcp" class="section fade-in space-y-xl">
+  <header>
+    <h3 class="font-display text-headline-lg text-on-surface mb-xs">MCP Server</h3>
+    <p class="text-on-surface-variant max-w-3xl">Expose DecisionGraph as a Model Context Protocol (MCP) server so other AI agents — Claude Desktop, Claude Code, custom agents — can query your knowledge graph, decision memory, and company workspaces directly. Every tool supports an optional <code class="text-secondary">company_id</code> for multi-tenant access.</p>
+  </header>
+
+  <!-- Status -->
+  <div class="luminous rounded-xl p-lg flex items-center justify-between flex-wrap gap-md">
+    <div class="flex items-center gap-md">
+      <span id="mcpDot" class="w-3 h-3 rounded-full bg-outline animate-pulse"></span>
+      <div>
+        <div id="mcpStatusText" class="font-bold">Checking module…</div>
+        <div id="mcpStatusDetail" class="text-xs text-on-surface-variant font-mono-data">—</div>
+      </div>
+    </div>
+    <div class="text-xs text-on-surface-variant font-mono-data">
+      <div>Project: <span id="mcpPath" class="text-primary">—</span></div>
+      <div>Python: <span id="mcpPython" class="text-primary">—</span></div>
+    </div>
+  </div>
+
+  <!-- REMOTE (public HTTP) — works from anywhere over the tunnel -->
+  <div id="mcpRemoteCard" class="luminous rounded-xl p-lg space-y-md border border-tertiary/30">
+    <div class="flex items-center justify-between">
+      <h4 class="font-display font-bold flex items-center gap-sm">
+        <span class="material-symbols-outlined text-tertiary">cloud</span>Remote — HTTP API (public)
+      </h4>
+      <span class="px-sm py-xs bg-tertiary/10 text-tertiary border border-tertiary/20 rounded text-[10px] font-bold">WORKS ANYWHERE</span>
+    </div>
+    <p class="text-xs text-on-surface-variant">Any agent or HTTP client can call these over the public URL — no install, no paths:</p>
+    <div class="flex items-center gap-sm">
+      <pre id="mcpPublicBase" class="flex-1 bg-surface-container-lowest p-md rounded-lg text-xs font-mono-data text-tertiary overflow-x-auto whitespace-pre">—</pre>
+      <button onclick="copyMCP('public')" class="px-sm py-xs bg-surface-container-high rounded-lg text-xs border border-outline-variant hover:bg-surface-container-highest">Copy</button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-sm text-[11px] font-mono-data">
+      <div class="bg-surface-container-lowest p-sm rounded"><span class="text-secondary">GET</span>  /api/mcp/tools</div>
+      <div class="bg-surface-container-lowest p-sm rounded"><span class="text-secondary">POST</span> /api/mcp/call/{tool}</div>
+    </div>
+    <pre id="mcpCurl" class="bg-surface-container-lowest p-md rounded-lg text-[11px] font-mono-data text-on-surface-variant overflow-x-auto whitespace-pre">—</pre>
+  </div>
+
+  <!-- LOCAL (stdio) — same machine only -->
+  <div class="flex items-center gap-sm mt-md mb-xs">
+    <span class="material-symbols-outlined text-outline text-[18px]">computer</span>
+    <span class="text-label-sm uppercase tracking-wider text-outline">Local stdio — same machine only (Claude Desktop / Claude Code on this PC)</span>
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
+    <div class="luminous rounded-xl p-lg space-y-md">
+      <div class="flex items-center justify-between">
+        <h4 class="font-display font-bold flex items-center gap-sm"><span class="material-symbols-outlined text-outline">desktop_windows</span>Claude Desktop <span class="text-[10px] text-outline">(local)</span></h4>
+        <button onclick="copyMCP('desktop')" class="px-sm py-xs bg-surface-container-high rounded-lg text-xs border border-outline-variant hover:bg-surface-container-highest">Copy</button>
+      </div>
+      <p class="text-xs text-on-surface-variant">Add to <code class="text-secondary">%APPDATA%\Claude\claude_desktop_config.json</code> — runs as a local subprocess, cannot be used remotely:</p>
+      <pre id="mcpDesktop" class="bg-surface-container-lowest p-md rounded-lg text-xs font-mono-data text-on-surface overflow-x-auto whitespace-pre">{ }</pre>
+    </div>
+    <div class="luminous rounded-xl p-lg space-y-md">
+      <div class="flex items-center justify-between">
+        <h4 class="font-display font-bold flex items-center gap-sm"><span class="material-symbols-outlined text-outline">terminal</span>Claude Code CLI <span class="text-[10px] text-outline">(local)</span></h4>
+        <button onclick="copyMCP('cli')" class="px-sm py-xs bg-surface-container-high rounded-lg text-xs border border-outline-variant hover:bg-surface-container-highest">Copy</button>
+      </div>
+      <p class="text-xs text-on-surface-variant">Register once with <code class="text-secondary">claude mcp add</code> (local machine only):</p>
+      <pre id="mcpCli" class="bg-surface-container-lowest p-md rounded-lg text-xs font-mono-data text-on-surface overflow-x-auto whitespace-pre">—</pre>
+    </div>
+  </div>
+
+  <!-- Tool catalog -->
+  <div>
+    <div class="flex items-center justify-between mb-md">
+      <h4 class="font-display text-headline-md">Exposed Tools</h4>
+      <span id="mcpToolCount" class="text-xs text-on-surface-variant font-mono-data">— tools</span>
+    </div>
+    <div id="mcpToolsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-gutter"></div>
+  </div>
+</section>
+
+<!-- ═════════════ SIMULATION STUDIO SECTION ═════════════ -->
+<section id="sec-simulation" class="section fade-in space-y-xl">
+  <header>
+    <h3 class="font-display text-headline-lg text-on-surface mb-xs">Simulation Studio</h3>
+    <p class="text-on-surface-variant max-w-3xl">Simulate major decisions across multiple stakeholder personas. Each persona reacts independently; the report aggregates sentiment, surfaces risks, and predicts a timeline. Engine: <span id="simModeLabel" class="text-primary">MiroFish</span> — a multi-agent <a href="https://github.com/666ghj/MiroFish" target="_blank" class="text-secondary underline">MiroFish</a>-architecture simulator running on a local model.</p>
+  </header>
+
+  <!-- ── TOP — Decision Input ─────────────────────────────────────── -->
+  <div class="luminous rounded-xl p-lg space-y-lg">
+    <div>
+      <label class="text-label-sm uppercase tracking-wider text-on-surface-variant block mb-sm">Describe the decision to simulate</label>
+      <textarea id="simDecision" rows="4"
+        placeholder="e.g. We are launching a new product at $499, targeting enterprise customers in Q3 2025…"
+        class="w-full bg-surface-container-lowest border-2 border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-xl p-lg text-body-md text-on-surface min-h-[140px] resize-none focus:outline-none"></textarea>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+      <div>
+        <label class="text-label-sm uppercase tracking-wider text-on-surface-variant block mb-sm">Company context (optional)</label>
+        <select id="simCompany" class="w-full bg-surface-container-highest border border-outline-variant rounded-lg px-md py-sm focus:outline-none focus:border-primary">
+          <option value="">— Personal graph (no company context) —</option>
+        </select>
+      </div>
+      <div>
+        <div class="flex justify-between mb-sm">
+          <label class="text-label-sm uppercase tracking-wider text-on-surface-variant">Simulation depth (rounds)</label>
+          <span id="simDepthLabel" class="font-mono-data text-primary text-sm">10</span>
+        </div>
+        <input id="simDepth" type="range" min="1" max="100" value="10" oninput="simDepthLabel.textContent=this.value" class="w-full accent-primary"/>
+      </div>
+    </div>
+
+    <div>
+      <label class="text-label-sm uppercase tracking-wider text-on-surface-variant block mb-sm">Stakeholders to simulate</label>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-sm" id="simPersonas">
+        <label class="flex items-center gap-sm bg-surface-container-highest border border-outline-variant rounded-lg px-md py-sm cursor-pointer hover:border-primary/50">
+          <input type="checkbox" value="investors"  checked class="accent-primary"/><span class="material-symbols-outlined text-secondary text-[18px]">trending_up</span><span class="text-sm">Investors</span>
+        </label>
+        <label class="flex items-center gap-sm bg-surface-container-highest border border-outline-variant rounded-lg px-md py-sm cursor-pointer hover:border-primary/50">
+          <input type="checkbox" value="competitors" checked class="accent-primary"/><span class="material-symbols-outlined text-error text-[18px]">sports_kabaddi</span><span class="text-sm">Competitors</span>
+        </label>
+        <label class="flex items-center gap-sm bg-surface-container-highest border border-outline-variant rounded-lg px-md py-sm cursor-pointer hover:border-primary/50">
+          <input type="checkbox" value="customers"   checked class="accent-primary"/><span class="material-symbols-outlined text-tertiary text-[18px]">groups</span><span class="text-sm">Customers</span>
+        </label>
+        <label class="flex items-center gap-sm bg-surface-container-highest border border-outline-variant rounded-lg px-md py-sm cursor-pointer hover:border-primary/50">
+          <input type="checkbox" value="employees"   checked class="accent-primary"/><span class="material-symbols-outlined text-primary text-[18px]">badge</span><span class="text-sm">Employees</span>
+        </label>
+        <label class="flex items-center gap-sm bg-surface-container-highest border border-outline-variant rounded-lg px-md py-sm cursor-pointer hover:border-primary/50">
+          <input type="checkbox" value="media"       class="accent-primary"/><span class="material-symbols-outlined text-[18px]">newspaper</span><span class="text-sm">Media</span>
+        </label>
+        <label class="flex items-center gap-sm bg-surface-container-highest border border-outline-variant rounded-lg px-md py-sm cursor-pointer hover:border-primary/50">
+          <input type="checkbox" value="regulators"  class="accent-primary"/><span class="material-symbols-outlined text-[18px]">gavel</span><span class="text-sm">Regulators</span>
+        </label>
+      </div>
+    </div>
+
+    <button onclick="runSimulation()" id="simRunBtn" class="w-full btn-primary py-md rounded-xl flex items-center justify-center gap-sm text-base shadow-lg shadow-primary/20">
+      <span class="material-symbols-outlined">play_circle</span>Run Simulation
+    </button>
+  </div>
+
+  <!-- ── MIDDLE — Live Feed ─────────────────────────────────────── -->
+  <div id="simLiveSection" class="luminous rounded-xl p-lg space-y-md hidden">
+    <div class="flex items-center justify-between">
+      <h4 class="font-display text-headline-md flex items-center gap-sm">
+        <span class="material-symbols-outlined text-primary">stream</span>Live Simulation Feed
+      </h4>
+      <div class="flex items-center gap-md">
+        <span id="simStatus" class="text-xs font-mono-data text-on-surface-variant">running…</span>
+        <span id="simCount"  class="text-xs font-mono-data text-primary">0 agents</span>
+      </div>
+    </div>
+    <div class="w-full bg-surface-container-lowest h-2 rounded-full overflow-hidden">
+      <div id="simProgress" class="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-300" style="width:0%"></div>
+    </div>
+    <div id="simAgentFeed" class="grid grid-cols-1 md:grid-cols-2 gap-sm max-h-[600px] overflow-y-auto pr-xs"></div>
+  </div>
+
+  <!-- ── BOTTOM — Final Report ──────────────────────────────────── -->
+  <div id="simReportSection" class="space-y-lg hidden">
+    <!-- consensus + sentiment -->
+    <div class="luminous rounded-xl p-lg">
+      <div class="flex flex-wrap items-center justify-between gap-md">
+        <div>
+          <div class="text-label-sm uppercase tracking-widest text-primary font-bold">Overall Consensus</div>
+          <div class="flex items-baseline gap-sm mt-xs">
+            <span id="simConsensus" class="font-mono-data text-[64px] font-bold text-primary leading-none">—</span>
+            <span class="text-on-surface-variant">/ 100</span>
+          </div>
+        </div>
+        <div id="simSentimentBars" class="space-y-xs flex-1 max-w-md ml-xl"></div>
+      </div>
+    </div>
+
+    <!-- risks + opportunities side by side -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+      <div class="luminous rounded-xl p-lg">
+        <h5 class="text-label-sm uppercase tracking-widest text-error font-bold mb-md flex items-center gap-sm">
+          <span class="material-symbols-outlined">warning</span>Risk Flags
+        </h5>
+        <div id="simRisks" class="space-y-sm"></div>
+      </div>
+      <div class="luminous rounded-xl p-lg">
+        <h5 class="text-label-sm uppercase tracking-widest text-tertiary font-bold mb-md flex items-center gap-sm">
+          <span class="material-symbols-outlined">lightbulb</span>Opportunities
+        </h5>
+        <div id="simOpps" class="space-y-sm"></div>
+      </div>
+    </div>
+
+    <!-- timeline -->
+    <div class="luminous rounded-xl p-lg">
+      <h5 class="text-label-sm uppercase tracking-widest text-secondary font-bold mb-md flex items-center gap-sm">
+        <span class="material-symbols-outlined">timeline</span>Timeline Prediction
+      </h5>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-md" id="simTimeline"></div>
+    </div>
+
+    <!-- per-persona breakdown -->
+    <div class="luminous rounded-xl p-lg">
+      <h5 class="text-label-sm uppercase tracking-widest text-primary font-bold mb-md flex items-center gap-sm">
+        <span class="material-symbols-outlined">analytics</span>Per-Persona Breakdown
+      </h5>
+      <div id="simByPersona" class="space-y-md"></div>
+    </div>
+
+    <!-- store action -->
+    <div class="flex justify-end">
+      <button onclick="storeSimulation()" id="simStoreBtn" class="btn-primary px-xl py-sm rounded-xl flex items-center gap-sm">
+        <span class="material-symbols-outlined">save</span>Store in Decision Memory
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════ MCP TRY-IT MODAL ═════════════ -->
+<div id="mcpModal" class="fixed inset-0 bg-background/80 backdrop-blur-sm z-[90] hidden items-center justify-center">
+  <div class="bg-surface-container border border-outline-variant rounded-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto m-md p-lg">
+    <div class="flex justify-between items-start mb-md">
+      <div>
+        <h3 id="mcpModalTitle" class="font-display text-headline-md font-bold">tool</h3>
+        <p id="mcpModalDesc" class="text-sm text-on-surface-variant mt-xs"></p>
+      </div>
+      <button onclick="closeMcpModal()" class="text-outline hover:text-on-surface"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <h5 class="text-label-sm uppercase tracking-wider text-on-surface-variant mb-sm">Arguments</h5>
+    <div id="mcpModalFields" class="space-y-md mb-md"></div>
+    <button onclick="runMcpTool()" id="mcpRunBtn" class="w-full btn-primary py-sm rounded-xl flex items-center justify-center gap-sm">
+      <span class="material-symbols-outlined">bolt</span>Run tool
+    </button>
+    <div id="mcpModalResultWrap" class="hidden mt-md">
+      <h5 class="text-label-sm uppercase tracking-wider text-on-surface-variant mb-sm">Result</h5>
+      <pre id="mcpModalResult" class="bg-surface-container-lowest p-md rounded-lg text-xs font-mono-data whitespace-pre-wrap break-all max-h-96 overflow-y-auto"></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════════ INTEGRATION CONFIG MODAL ═════════════ -->
+<div id="intModal" class="fixed inset-0 bg-background/80 backdrop-blur-sm z-[90] hidden items-center justify-center">
+  <div class="bg-surface-container border border-outline-variant rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto m-md p-lg">
+    <div class="flex justify-between items-center mb-lg">
+      <h3 id="intModalTitle" class="font-display text-headline-md"></h3>
+      <button onclick="closeIntModal()" class="text-outline hover:text-on-surface"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div id="intModalFields" class="space-y-md"></div>
+    <div id="intModalProbe" class="mt-md p-md rounded-lg hidden font-mono-data text-xs"></div>
+    <div class="flex gap-sm mt-lg">
+      <button onclick="probeIntegration()" class="flex-1 bg-surface-container-high border border-outline-variant rounded-xl py-sm hover:bg-surface-container-highest">Test connection</button>
+      <button onclick="saveIntegration()" class="flex-1 btn-primary rounded-xl py-sm">Save</button>
+      <button onclick="syncIntegration()" id="intSyncBtn" class="flex-1 hidden bg-tertiary/20 text-tertiary border border-tertiary/30 rounded-xl py-sm hover:bg-tertiary/30">Pull docs</button>
+    </div>
+  </div>
+</div>
+
+</div>
+</main>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+// ═════════════ STATE ═════════════
+let MODE = "deep";
+let CURRENT = "kb";
+let COMPANIES = [];
+let ACTIVE_SESSION = null;
+let TYPING = false;
+let NETWORK = null;
+
+// ═════════════ UTILS ═════════════
+const $ = (id) => document.getElementById(id);
+function toast(msg, kind="ok"){const t=$("toast");t.textContent=msg;t.className=`toast ${kind}`;setTimeout(()=>t.classList.add("hidden"),3500);}
+async function api(path, opts={}){
+  const r = await fetch(path, opts);
+  if(!r.ok){const j=await r.json().catch(()=>({detail:r.statusText}));throw new Error(j.detail||j.error||"Request failed");}
+  return r.json();
+}
+
+// ═════════════ CONNECT ═════════════
+// (doConnect / disconnect removed — LLM is server-managed, no visitor login)
+
+// ═════════════ ROUTING ═════════════
+function route(name){
+  CURRENT=name;
+  document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
+  $(`sec-${name}`).classList.add("active");
+  document.querySelectorAll(".nav-item").forEach(a=>{
+    a.classList.remove("tab-active","text-on-surface");
+    a.classList.add("text-on-surface-variant");
+  });
+  const active = document.querySelector(`.nav-item[data-route="${name}"]`);
+  if(active){active.classList.add("tab-active");active.classList.remove("text-on-surface-variant");}
+  $("topTitle").textContent = {kb:"Knowledge Base",discussion:"Discussion",query:"Query Terminal",brain:"Brain",graph:"Graph Visualizer",integrations:"Integrations",mcp:"MCP Server",simulation:"Simulation Studio"}[name];
+  if(name==="discussion") refreshSessions();
+  if(name==="graph"){ refreshCompanies().then(onGScopeChange); }
+  if(name==="integrations") refreshIntegrations();
+  if(name==="mcp") refreshMCP();
+  if(name==="simulation") refreshSimulationTab();
+  if(name==="brain") refreshBrain();
+}
+
+// ═════════════ BRAIN TAB ═════════════
+async function refreshBrain(){
+  try{
+    const d = await api("/api/compiled");
+    const sel = $("ctTopic");
+    const keys = Object.keys(d.compiled || {});
+    const prev = sel.value;
+    sel.innerHTML = `<option value="">— pick a topic —</option>` +
+      keys.map(k=>`<option value="${k}">Topic ${k} · ${(d.compiled[k].n||0)} evidence</option>`).join("");
+    sel.value = prev;
+    // also offer communities that have decisions but no compiled truth yet
+  }catch(e){}
+}
+async function loadCompiled(){
+  const cid = $("ctTopic").value;
+  if(!cid){ $("ctCompiled").innerHTML='<span class="text-outline">Pick a topic.</span>'; $("ctTimeline").innerHTML=""; return; }
+  try{
+    const d = await api(`/api/compiled/${encodeURIComponent(cid)}`);
+    $("ctCompiled").innerHTML = d.compiled_truth
+      ? `${escapeHtml(d.compiled_truth)}<div class="text-[10px] text-outline mt-sm">compiled ${(''+d.compiled_at).slice(0,16)} · ${d.evidence_count} evidence</div>`
+      : '<span class="text-outline">Not compiled yet — hit Recompile.</span>';
+    $("ctTimeline").innerHTML = (d.timeline||[]).map(r=>`
+      <div class="bg-surface-container-lowest border border-outline-variant rounded p-sm text-xs">
+        <span class="font-mono-data text-outline">${(''+r.timestamp).slice(0,16)}</span>
+        <span class="px-xs rounded text-[10px] ${r.outcome==='success'?'bg-tertiary/20 text-tertiary':r.outcome==='failure'?'bg-error/20 text-error':'bg-surface-container-high text-outline'}">${r.outcome}</span>
+        <span class="text-on-surface">${escapeHtml(r.question)}</span>
+        <span class="text-on-surface-variant">→ ${escapeHtml((r.answer||'').slice(0,140))}</span>
+      </div>`).join("") || '<span class="text-outline text-xs">no evidence</span>';
+  }catch(e){ toast(e.message,"err"); }
+}
+async function recompileTopic(){
+  const cid = $("ctTopic").value;
+  if(!cid){ toast("Pick a topic first","err"); return; }
+  const b=$("ctRecompileBtn"); b.disabled=true; b.textContent="Compiling…";
+  try{
+    await api(`/api/compiled/${encodeURIComponent(cid)}/recompile`,{method:"POST"});
+    await loadCompiled(); toast("Recompiled");
+  }catch(e){ toast(e.message,"err"); }
+  finally{ b.disabled=false; b.textContent="Recompile"; }
+}
+async function doRecall(){
+  const e=$("recallBox").value.trim();
+  if(!e){ return; }
+  const box=$("recallOut"); box.classList.remove("hidden");
+  box.innerHTML='<span class="text-outline text-xs">recalling…</span>';
+  try{
+    const d=await api(`/api/recall?entity=${encodeURIComponent(e)}`);
+    const facts=(d.facts||[]).map(f=>`
+      <div class="bg-surface-container-lowest border border-tertiary/20 rounded p-sm text-xs">
+        <div class="flex justify-between"><span class="font-bold text-on-surface">${escapeHtml(f.question||'')}</span>
+          <span class="font-mono-data text-tertiary">conf ${(f.confidence??0)}</span></div>
+        <div class="text-on-surface-variant mt-xs">${escapeHtml((f.answer||'').slice(0,200))}</div>
+      </div>`).join("");
+    const nb=(d.graph_neighbourhood||[]).map(t=>`<div class="font-mono-data text-[11px] text-outline">${escapeHtml(t)}</div>`).join("");
+    box.innerHTML = (facts || '<span class="text-outline text-xs">no active facts</span>') +
+      (nb?`<div class="text-[10px] uppercase tracking-wider text-outline mt-sm mb-xs">graph neighbourhood</div>${nb}`:"");
+  }catch(err){ box.innerHTML=`<span class="text-error text-xs">${err.message}</span>`; }
+}
+async function runDream(){
+  const b=$("dreamBtn"); b.disabled=true; b.innerHTML='<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>Dreaming…';
+  try{
+    const j=await api("/api/dream/run",{method:"POST"});
+    // poll the job
+    let done=null;
+    for(let i=0;i<60;i++){
+      await new Promise(r=>setTimeout(r,2000));
+      const job=await api(`/api/jobs/${j.job_id}`);
+      if(job.status==="done"){ done=job.result; break; }
+      if(job.status==="failed"){ throw new Error(job.error||"dream failed"); }
+    }
+    $("dreamReport").classList.remove("hidden");
+    $("dreamReportBody").textContent = done ? JSON.stringify(done,null,2) : "(still running — check back)";
+    toast("Dream cycle complete"); await refreshBrain(); await refreshStatus();
+  }catch(e){ toast(e.message,"err"); }
+  finally{ b.disabled=false; b.innerHTML='<span class="material-symbols-outlined text-[18px]">bedtime</span>Run Dream Cycle'; }
+}
+function exportBrain(){
+  window.open("/api/workspace/export","_blank");
+}
+
+// ═════════════ STATUS + SIDEBAR STATS ═════════════
+async function refreshStatus(){
+  const s = await api("/api/status");
+  $("stNodes").textContent = s.stats?.nodes ?? 0;
+  $("stEdges").textContent = s.stats?.edges ?? 0;
+  $("stComms").textContent = s.stats?.communities ?? 0;
+  $("stDecs").textContent  = s.stats?.decisions ?? 0;
+  $("topModel").textContent = s.creds?.model || "";
+  // media ingest only shown if the server has a Gemini key configured
+  const mw = $("kbMediaWrap");
+  if (mw) mw.classList.toggle("hidden", !(s.settings && s.settings.media_ingest_enabled));
+  // workspace badge (this visitor's isolated id)
+  try{
+    const w = await api("/api/workspace");
+    if (w.short) $("wsBadge").textContent = w.short;
+  }catch(e){}
+  return true;
+}
+
+// ═════════════ COMPANIES ═════════════
+async function refreshCompanies(){
+  const d = await api("/api/companies"); COMPANIES = d.companies;
+  for(const sel of ["kbCompanySelect","qScope","newSessCompany"]){
+    const el=$(sel); if(!el) continue;
+    const prev=el.value;
+    const placeholder = sel==="qScope" ? "Personal Graph" : (sel==="newSessCompany" ? "No company context" : "— Select / Create —");
+    el.innerHTML=`<option value="">${placeholder}</option>` + COMPANIES.map(c=>`<option value="${c.id}">${c.name} (${c.documents} docs)</option>`).join("");
+    el.value=prev;
+  }
+}
+function showCreateCompany(){$("newCompanyForm").classList.toggle("hidden");}
+async function createCompany(){
+  const id=$("newCoId").value.trim().toLowerCase(); const name=$("newCoName").value.trim();
+  if(!id||!name){toast("Both fields required","err");return;}
+  try{
+    await api("/api/companies",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,name})});
+    $("newCoId").value=""; $("newCoName").value=""; $("newCompanyForm").classList.add("hidden");
+    await refreshCompanies(); toast(`Created ${name}`);
+  }catch(e){toast(e.message,"err");}
+}
+async function onCompanyChange(){
+  const id=$("kbCompanySelect").value;
+  const wrap=$("kbCompanyDocs"); wrap.innerHTML="";
+  if(!id) return;
+  try{
+    const d=await api(`/api/companies/${id}/documents`);
+    wrap.innerHTML = d.documents.map(doc=>`
+      <div class="flex justify-between items-center bg-surface-container p-sm rounded-lg border border-outline-variant text-xs">
+        <span class="font-mono-data truncate">${doc.filename}</span>
+        <span class="bg-secondary/10 text-secondary px-sm py-xs rounded text-[10px] font-bold">${doc.category}</span>
+      </div>`).join("");
+  }catch(e){}
+}
+
+// ═════════════ INGEST ═════════════
+function updateFileList(inputId, listId){
+  const fs=$(inputId).files; const wrap=$(listId);
+  wrap.innerHTML = Array.from(fs).map(f=>`<div class="flex justify-between text-xs font-mono-data text-on-surface-variant bg-surface-container px-md py-xs rounded-lg"><span>${f.name}</span><span>${(f.size/1024).toFixed(1)} KB</span></div>`).join("");
+}
+function _kbCo(){ return ($("kbCompanySelect") && $("kbCompanySelect").value) || null; }
+async function _pollIngestJob(jobId, st){
+  // poll up to ~6 min — extraction is slow but runs server-side (no tunnel timeout)
+  for(let i=0;i<180;i++){
+    await new Promise(r=>setTimeout(r,2000));
+    let j; try{ j=await api(`/api/jobs/${jobId}`); }catch(e){ continue; }
+    if(j.status==="done"){
+      const r=j.result||{};
+      if(r.ok){
+        st.innerHTML=`<span class="text-tertiary">✓ ingested: ${escapeHtml(r.title||'')}</span> — nodes ${r.stats?.nodes ?? r.stats?.graph?.nodes ?? '?'}`;
+        toast("Added to graph"); await refreshStatus();
+      } else {
+        st.innerHTML=`<span class="text-error">${escapeHtml(r.error||'ingest failed')}</span>`;
+      }
+      return;
+    }
+    if(j.status==="failed"){ st.innerHTML=`<span class="text-error">${escapeHtml(j.error||'failed')}</span>`; return; }
+    st.textContent = `working… (${i*2}s) — runs server-side, safe to wait`;
+  }
+  st.innerHTML=`<span class="text-on-surface-variant">Still processing — check the Brain → jobs later.</span>`;
+}
+async function _webIngest(path, payload, btnId, label){
+  const b=$(btnId); const st=$("kbWebStatus");
+  b.disabled=true; st.textContent=`${label}… (queued)`;
+  try{
+    const out=await api(path,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({...payload, company_id:_kbCo()})});
+    if(out.job_id){ await _pollIngestJob(out.job_id, st); }
+    else { st.innerHTML=`<span class="text-error">unexpected response</span>`; }
+  }catch(e){ st.innerHTML=`<span class="text-error">${escapeHtml(e.message)}</span>`; }
+  finally{ b.disabled=false; }
+}
+function ingestUrl(){
+  const u=$("kbUrl").value.trim(); if(!u){toast("Paste a URL","err");return;}
+  _webIngest("/api/ingest/url",{url:u},"kbUrlBtn","Scraping page");
+}
+function ingestYoutube(){
+  const u=$("kbYt").value.trim(); if(!u){toast("Paste a YouTube URL","err");return;}
+  _webIngest("/api/ingest/youtube",{url:u},"kbYtBtn","Fetching transcript");
+}
+async function ingestMedia(){
+  const f=$("kbMedia").files[0]; if(!f) return;
+  const st=$("kbWebStatus"); st.textContent="Transcribing via Gemini (can take a minute)…";
+  const fd=new FormData(); fd.append("file",f);
+  const co=_kbCo(); if(co) fd.append("company_id",co);
+  try{
+    const out=await api("/api/ingest/media",{method:"POST",body:fd});
+    if(out.job_id){ await _pollIngestJob(out.job_id, st); }
+  }catch(e){ st.innerHTML=`<span class="text-error">${escapeHtml(e.message)}</span>`; }
+  finally{ $("kbMedia").value=""; }
+}
+
+async function ingestPersonal(){
+  const fs=$("kbPersonalFiles").files;
+  if(!fs.length){toast("Select files first","err");return;}
+  const fd=new FormData(); for(const f of fs) fd.append("files",f);
+  const btn=$("kbPersonalBtn"); btn.disabled=true; $("kbPersonalProgress").classList.remove("hidden");
+  try{
+    const out=await api("/api/ingest/personal",{method:"POST",body:fd});
+    toast(`Ingested ${out.results.filter(r=>r.ok).length}/${out.results.length} files`);
+    await refreshStatus();
+  }catch(e){toast(e.message,"err");}
+  finally{btn.disabled=false; $("kbPersonalProgress").classList.add("hidden"); $("kbPersonalFiles").value=""; $("kbPersonalList").innerHTML="";}
+}
+async function ingestCompany(){
+  const cid=$("kbCompanySelect").value;
+  if(!cid){toast("Select a company first","err");return;}
+  const fs=$("kbCompanyFiles").files;
+  if(!fs.length){toast("Select files first","err");return;}
+  const fd=new FormData(); for(const f of fs) fd.append("files",f);
+  const btn=$("kbCompanyBtn"); btn.disabled=true;
+  try{
+    const out=await api(`/api/ingest/company/${cid}`,{method:"POST",body:fd});
+    toast(`Ingested ${out.results.filter(r=>r.ok).length}/${out.results.length} files`);
+    await refreshStatus(); await refreshCompanies(); await onCompanyChange();
+  }catch(e){toast(e.message,"err");}
+  finally{btn.disabled=false; $("kbCompanyFiles").value=""; $("kbCompanyList").innerHTML="";}
+}
+
+// ═════════════ QUERY ═════════════
+function setMode(m){
+  MODE=m;
+  document.querySelectorAll(".qmode").forEach(b=>{
+    if(b.dataset.mode===m){b.classList.add("bg-primary","text-on-primary","shadow-md");b.classList.remove("text-on-surface-variant");}
+    else{b.classList.remove("bg-primary","text-on-primary","shadow-md");b.classList.add("text-on-surface-variant");}
+  });
+}
+async function runQuery(){
+  const q=$("qInput").value.trim(); if(!q){toast("Enter a question","err");return;}
+  const cid=$("qScope").value || null;
+  $("qResult").classList.add("hidden"); $("qLoading").classList.remove("hidden");
+  $("qBtn").disabled=true;
+  try{
+    const hybrid = $("qHybrid").checked;
+    const out=await api("/api/query",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question:q,mode:MODE,company_id:cid,hybrid})});
+    $("qAnswer").textContent = out.answer || "(empty)";
+    $("qResultMode").textContent = (out.mode||MODE).toUpperCase();
+    const ib=$("qIntentBadge");
+    if(out.intent){ ib.textContent=`auto → ${out.intent} → ${out.mode}`; ib.classList.remove("hidden"); }
+    else ib.classList.add("hidden");
+    if(out.hybrid_context && out.hybrid_context.length){
+      $("qAnswer").textContent += "\n\n— hybrid context (vector⊕keyword) —\n" + out.hybrid_context.slice(0,12).map(x=>"• "+x).join("\n");
+    }
+    $("qCommunities").innerHTML = (out.communities||[]).map(c=>`<span class="px-md py-xs bg-primary/10 text-primary border border-primary/20 rounded-lg text-xs font-bold">#${c.id} · ${(c.summary||"").slice(0,40)}</span>`).join("") || `<span class="text-outline text-xs">none</span>`;
+    $("qPast").innerHTML = (out.past_decisions||[]).map(p=>`
+      <div class="luminous p-md rounded-xl">
+        <div class="flex justify-between items-start mb-xs">
+          <span class="font-mono-data text-[10px] text-primary">Similarity ${p.similarity||"?"}</span>
+        </div>
+        <h5 class="font-body-md font-bold">${(p.question||"").slice(0,80)}</h5>
+        <p class="text-xs text-on-surface-variant mt-xs line-clamp-2">${(p.reasoning_summary||"").slice(0,100)}</p>
+      </div>`).join("") || `<span class="text-outline text-xs">none</span>`;
+    $("qResult").classList.remove("hidden");
+    await refreshStatus();
+  }catch(e){toast(e.message,"err");}
+  finally{$("qLoading").classList.add("hidden"); $("qBtn").disabled=false;}
+}
+
+// ═════════════ DISCUSSION ═════════════
+async function refreshSessions(){
+  const d=await api("/api/sessions");
+  ACTIVE_SESSION = d.active;
+  // active panel
+  if(ACTIVE_SESSION){
+    $("sessTitle").textContent = ACTIVE_SESSION.title;
+    $("sessEndBtn").classList.remove("hidden");
+    $("chatInput").disabled=false; $("chatSend").disabled=false;
+    renderMessages(ACTIVE_SESSION.messages);
+  }else{
+    $("sessTitle").textContent = "No active session";
+    $("sessEndBtn").classList.add("hidden");
+    $("chatInput").disabled=true; $("chatSend").disabled=true;
+    $("chatBody").innerHTML = `<div class="text-center text-on-surface-variant py-xl"><span class="material-symbols-outlined text-[48px] text-outline">forum</span><p class="mt-md">Start a session from the right panel.</p></div>`;
+  }
+  // past sessions
+  $("pastSessions").innerHTML = (d.sessions||[]).map(s=>`
+    <div class="bg-surface-container p-sm rounded-lg border border-outline-variant">
+      <div class="font-bold text-sm truncate">${s.title}</div>
+      <div class="text-[10px] text-outline font-mono-data">${(s.started_at||"").slice(0,16)} · ${s.messages_count} msgs · ${(s.duration_minutes||0).toFixed(1)}m</div>
+      <p class="text-xs text-on-surface-variant mt-xs line-clamp-2">${(s.summary||"").slice(0,100)}</p>
+    </div>`).join("") || `<p class="text-outline text-xs">No sessions yet.</p>`;
+}
+function renderMessages(msgs){
+  const body=$("chatBody");
+  body.innerHTML = msgs.map(m=>{
+    if(m.role==="user"){
+      return `<div class="flex justify-end"><div class="max-w-2xl bg-primary-container text-on-primary-container p-lg rounded-2xl rounded-tr-none shadow"><p>${escapeHtml(m.content)}</p></div></div>`;
+    }
+    return `<div class="flex justify-start"><div class="flex gap-md max-w-3xl"><div class="flex-shrink-0 w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant flex items-center justify-center"><span class="material-symbols-outlined filled text-primary">smart_toy</span></div><div class="bg-surface-container-high border border-outline-variant p-lg rounded-2xl rounded-tl-none chat-bubble-agent"><p class="whitespace-pre-wrap">${escapeHtml(m.content)}</p></div></div></div>`;
+  }).join("");
+  if(TYPING){
+    body.innerHTML += `<div class="flex justify-start"><div class="flex gap-md"><div class="flex-shrink-0 w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant flex items-center justify-center"><span class="material-symbols-outlined filled text-primary">smart_toy</span></div><div class="bg-surface-container-high border border-outline-variant px-lg py-md rounded-2xl rounded-tl-none chat-bubble-agent"><div class="dot-pulse"><span></span><span></span><span></span></div></div></div></div>`;
+  }
+  body.scrollTop = body.scrollHeight;
+}
+function escapeHtml(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+async function startSession(){
+  const title=$("newSessTitle").value.trim(); const co=$("newSessCompany").value;
+  await api("/api/sessions/start",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title,company_id:co})});
+  $("newSessTitle").value=""; toast("Session started");
+  await refreshSessions();
+}
+async function sendChat(e){
+  e.preventDefault();
+  const txt=$("chatInput").value.trim(); if(!txt) return;
+  $("chatInput").value=""; $("chatInput").disabled=true; $("chatSend").disabled=true;
+  if(!ACTIVE_SESSION) ACTIVE_SESSION={messages:[]};
+  ACTIVE_SESSION.messages.push({role:"user",content:txt});
+  TYPING=true; renderMessages(ACTIVE_SESSION.messages);
+  try{
+    const out=await api("/api/sessions/message",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:txt})});
+    ACTIVE_SESSION.messages.push({role:"agent",content:out.answer});
+  }catch(e){toast(e.message,"err");}
+  finally{TYPING=false; renderMessages(ACTIVE_SESSION.messages); $("chatInput").disabled=false; $("chatSend").disabled=false; $("chatInput").focus();}
+}
+async function endSession(){
+  if(!confirm("End the current session and generate summary?")) return;
+  try{
+    const out=await api("/api/sessions/end",{method:"POST"});
+    toast(`Session ended: ${out.title}`); await refreshSessions(); await refreshStatus();
+  }catch(e){toast(e.message,"err");}
+}
+
+// ═════════════ GRAPH ═════════════
+function onGScopeChange(){
+  const isCompanies = $("gScope").value === "companies";
+  const wrap = $("gCompanyWrap");
+  if(isCompanies){
+    wrap.classList.remove("hidden"); wrap.classList.add("flex");
+    // populate companies dropdown
+    const sel = $("gCompany"); const prev = sel.value;
+    sel.innerHTML = `<option value="">— Overview (all companies) —</option>` +
+      COMPANIES.map(c=>`<option value="${c.id}">${c.name} (${c.documents} docs)</option>`).join("");
+    sel.value = prev;
+  } else {
+    wrap.classList.add("hidden"); wrap.classList.remove("flex");
+  }
+}
+async function renderGraph(){
+  const scope=$("gScope").value; const max=parseInt($("gMax").value);
+  let url = `/api/graph?scope=${scope}&max_nodes=${max}`;
+  if(scope==="companies"){
+    const cid = $("gCompany").value;
+    if(cid) url += `&company_id=${encodeURIComponent(cid)}`;
+  }
+  const d = await api(url);
+  if(d.empty){$("gEmpty").classList.remove("hidden");if(NETWORK){NETWORK.destroy();NETWORK=null;}return;}
+  $("gEmpty").classList.add("hidden");
+  const nodes = new vis.DataSet(d.nodes);
+  const edges = new vis.DataSet(d.edges.map(e=>({...e,color:{color:"#474554",highlight:"#c7bfff"},width:0.7})));
+  const opts = {
+    physics:{forceAtlas2Based:{gravitationalConstant:-50,springLength:160,springConstant:0.08,avoidOverlap:0.5},solver:"forceAtlas2Based",stabilization:{iterations:150}},
+    nodes:{borderWidth:1,font:{size:11,face:"JetBrains Mono",color:"#e5e0ed"}},
+    edges:{smooth:{type:"continuous"}},
+    interaction:{hover:true,navigationButtons:true,tooltipDelay:200}
+  };
+  if(NETWORK) NETWORK.destroy();
+  NETWORK = new vis.Network($("graphCanvas"), {nodes, edges}, opts);
+}
+
+// ═════════════ SIMULATION STUDIO ═════════════
+let SIM_ID = null;
+let SIM_POLL = null;
+let SIM_RENDERED_AGENTS = 0;
+
+const SENTIMENT_DOT = {
+  positive: "bg-tertiary",
+  negative: "bg-error",
+  neutral:  "bg-outline",
+};
+const PERSONA_ICON = {
+  investors:"trending_up", competitors:"sports_kabaddi", customers:"groups",
+  employees:"badge", media:"newspaper", regulators:"gavel",
+};
+
+async function refreshSimulationTab(){
+  // populate company dropdown + mode label
+  await refreshCompanies();
+  const sel = $("simCompany");
+  if (sel) {
+    const prev = sel.value;
+    sel.innerHTML = `<option value="">— Personal graph (no company context) —</option>` +
+      COMPANIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
+    sel.value = prev;
+  }
+  // mode label reads from current settings
+  try {
+    const s = await api("/api/status");
+    const url = (s.settings || {}).mirofish_url || "";
+    $("simModeLabel").textContent = url ? "MiroFish" : "local LLM (mock)";
+  } catch(e){}
+}
+
+async function runSimulation(){
+  const decision = $("simDecision").value.trim();
+  if (!decision) { toast("Describe the decision first","err"); return; }
+  const personas = Array.from($("simPersonas").querySelectorAll("input[type=checkbox]:checked"))
+                        .map(el => el.value);
+  if (!personas.length) { toast("Select at least one stakeholder","err"); return; }
+  const depth = parseInt($("simDepth").value || "10");
+  const company_id = $("simCompany").value || "";
+
+  // reset UI
+  $("simRunBtn").disabled = true;
+  $("simLiveSection").classList.remove("hidden");
+  $("simReportSection").classList.add("hidden");
+  $("simAgentFeed").innerHTML = "";
+  $("simProgress").style.width = "0%";
+  $("simStatus").textContent = "starting…";
+  $("simCount").textContent = "0 agents";
+  SIM_RENDERED_AGENTS = 0;
+
+  try {
+    const out = await api("/api/simulation/run", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({decision_text: decision, personas, depth, company_id}),
+    });
+    SIM_ID = out.sim_id;
+    $("simStatus").textContent = `running (mode: ${out.mode})`;
+    startSimPolling();
+  } catch (e) {
+    $("simRunBtn").disabled = false;
+    toast(e.message, "err");
+  }
+}
+
+function startSimPolling(){
+  if (SIM_POLL) clearInterval(SIM_POLL);
+  SIM_POLL = setInterval(pollSimulation, 800);
+  pollSimulation();
+}
+
+async function pollSimulation(){
+  if (!SIM_ID) return;
+  try {
+    const sim = await api(`/api/simulation/${SIM_ID}`);
+    // progress bar + status text
+    $("simProgress").style.width = `${Math.round((sim.progress || 0) * 100)}%`;
+    const stage = sim.stage || sim.status || "";
+    $("simStatus").textContent = sim.status === "error"
+      ? `error: ${sim.error || stage}`
+      : `${sim.status} — ${stage}`;
+    // stream new agents
+    const agents = sim.agent_responses || [];
+    $("simCount").textContent = `${agents.length} agents`;
+    if (agents.length > SIM_RENDERED_AGENTS) {
+      for (let i = SIM_RENDERED_AGENTS; i < agents.length; i++) {
+        $("simAgentFeed").insertAdjacentHTML("beforeend", renderAgentCard(agents[i]));
+      }
+      SIM_RENDERED_AGENTS = agents.length;
+      // auto-scroll feed
+      const feed = $("simAgentFeed"); feed.scrollTop = feed.scrollHeight;
+    }
+    // terminal states
+    if (sim.status === "done") {
+      clearInterval(SIM_POLL); SIM_POLL = null;
+      $("simRunBtn").disabled = false;
+      renderSimReport(sim);
+    } else if (sim.status === "error") {
+      clearInterval(SIM_POLL); SIM_POLL = null;
+      $("simRunBtn").disabled = false;
+      toast(`Simulation failed: ${sim.error}`, "err");
+    }
+  } catch (e) {
+    // transient — keep polling
+    console.warn("poll failed:", e);
+  }
+}
+
+function renderAgentCard(a){
+  const dot = SENTIMENT_DOT[a.sentiment] || SENTIMENT_DOT.neutral;
+  const icon = PERSONA_ICON[a.persona] || "person";
+  return `
+    <div class="luminous rounded-xl p-md fade-in flex gap-md">
+      <div class="flex-shrink-0 w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center">
+        <span class="material-symbols-outlined text-primary text-[20px]">${icon}</span>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between mb-xs">
+          <div class="flex items-center gap-xs">
+            <span class="font-bold text-sm">${escapeHtml(a.name)}</span>
+            <span class="text-[10px] text-outline font-mono-data">[${escapeHtml(a.persona)}]</span>
+          </div>
+          <div class="flex items-center gap-xs">
+            <span class="w-2 h-2 rounded-full ${dot}"></span>
+            <span class="text-[10px] text-outline uppercase">${escapeHtml(a.sentiment)}</span>
+          </div>
+        </div>
+        <p class="text-xs text-on-surface-variant leading-relaxed">${escapeHtml(a.reaction)}</p>
+      </div>
+    </div>`;
+}
+
+function renderSimReport(sim){
+  const r = sim.report || {};
+  $("simReportSection").classList.remove("hidden");
+  // consensus
+  $("simConsensus").textContent = r.consensus_score ?? "—";
+  // sentiment bars
+  const sb = r.sentiment_breakdown || {positive:0,negative:0,neutral:0,total:1};
+  const total = sb.total || 1;
+  const pct = (n)=>Math.round(100 * n / total);
+  $("simSentimentBars").innerHTML = `
+    ${sentBar("Positive", pct(sb.positive), sb.positive, "bg-tertiary text-tertiary")}
+    ${sentBar("Negative", pct(sb.negative), sb.negative, "bg-error text-error")}
+    ${sentBar("Neutral",  pct(sb.neutral),  sb.neutral,  "bg-outline text-outline")}
+  `;
+  // risks
+  $("simRisks").innerHTML = (r.risks || []).length
+    ? r.risks.map(x=>`<div class="flex items-start gap-sm"><span class="material-symbols-outlined text-error text-[16px] mt-xs">flag</span><span class="text-sm text-on-surface-variant flex-1">${escapeHtml(x)}</span></div>`).join("")
+    : `<p class="text-xs text-outline italic">No risks surfaced.</p>`;
+  // opportunities
+  $("simOpps").innerHTML = (r.opportunities || []).length
+    ? r.opportunities.map(x=>`<div class="flex items-start gap-sm"><span class="material-symbols-outlined text-tertiary text-[16px] mt-xs">bolt</span><span class="text-sm text-on-surface-variant flex-1">${escapeHtml(x)}</span></div>`).join("")
+    : `<p class="text-xs text-outline italic">No opportunities surfaced.</p>`;
+  // timeline (4 columns)
+  const tl = r.timeline || {};
+  const slots = [
+    {k:"day_1",   l:"Day 1",   color:"text-primary"},
+    {k:"week_1",  l:"Week 1",  color:"text-secondary"},
+    {k:"month_1", l:"Month 1", color:"text-tertiary"},
+    {k:"month_3", l:"Month 3", color:"text-error"},
+  ];
+  $("simTimeline").innerHTML = slots.map(s=>`
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md">
+      <div class="text-[10px] uppercase tracking-widest font-bold ${s.color} mb-xs">${s.l}</div>
+      <p class="text-xs text-on-surface-variant leading-relaxed">${escapeHtml(tl[s.k] || "—")}</p>
+    </div>`).join("");
+  // per-persona breakdown — combine counts + LLM narrative
+  const counts = r.by_persona_counts || {};
+  const narrative = r.by_persona || {};
+  const personas = Array.from(new Set([...Object.keys(counts), ...Object.keys(narrative)]));
+  $("simByPersona").innerHTML = personas.length
+    ? personas.map(p=>{
+        const c = counts[p] || {positive:0,negative:0,neutral:0};
+        const t = (c.positive||0) + (c.negative||0) + (c.neutral||0) || 1;
+        const icon = PERSONA_ICON[p] || "person";
+        return `
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md">
+          <div class="flex items-center gap-md mb-sm">
+            <span class="material-symbols-outlined text-primary">${icon}</span>
+            <span class="font-bold capitalize">${escapeHtml(p)}</span>
+            <span class="text-[10px] text-outline font-mono-data">${t} agents</span>
+          </div>
+          <div class="flex h-2 rounded-full overflow-hidden mb-sm">
+            <div class="bg-tertiary" style="width:${Math.round(100*(c.positive||0)/t)}%"></div>
+            <div class="bg-outline"  style="width:${Math.round(100*(c.neutral ||0)/t)}%"></div>
+            <div class="bg-error"    style="width:${Math.round(100*(c.negative||0)/t)}%"></div>
+          </div>
+          ${narrative[p] ? `<p class="text-xs text-on-surface-variant leading-relaxed">${escapeHtml(narrative[p])}</p>` : ''}
+        </div>`;
+      }).join("")
+    : `<p class="text-sm text-outline italic">No persona breakdown available.</p>`;
+}
+
+function sentBar(label, pct, count, colors){
+  const [bg, text] = colors.split(" ");
+  return `<div>
+    <div class="flex justify-between text-[10px] mb-xs">
+      <span class="${text} font-bold">${label}</span>
+      <span class="text-on-surface-variant font-mono-data">${count} (${pct}%)</span>
+    </div>
+    <div class="w-full bg-surface-container-lowest h-1.5 rounded-full overflow-hidden">
+      <div class="h-full ${bg}" style="width:${pct}%"></div>
+    </div>
+  </div>`;
+}
+
+async function storeSimulation(){
+  if (!SIM_ID) return;
+  $("simStoreBtn").disabled = true;
+  try {
+    const r = await api(`/api/simulation/${SIM_ID}/store`, {method:"POST"});
+    toast(`Stored as decision ${r.decision_id} (${r.scope})`);
+    await refreshStatus();
+  } catch (e) {
+    toast(e.message, "err");
+  } finally {
+    $("simStoreBtn").disabled = false;
+  }
+}
+
+// ═════════════ INTEGRATIONS ═════════════
+let CURRENT_INT = null;
+
+const DIR_BADGE = {
+  input:  '<span class="px-sm py-xs bg-tertiary/10 text-tertiary border border-tertiary/20 rounded text-[10px] font-bold">INPUT</span>',
+  output: '<span class="px-sm py-xs bg-secondary/10 text-secondary border border-secondary/20 rounded text-[10px] font-bold">OUTPUT</span>',
+  both:   '<span class="px-sm py-xs bg-primary/10 text-primary border border-primary/20 rounded text-[10px] font-bold">BOTH</span>',
+};
+const ICONS = {
+  slack:"chat", notion:"description", google_drive:"folder", gmail:"mail",
+  google_calendar:"event", confluence:"menu_book", sharepoint:"corporate_fare",
+  supabase:"storage", jira:"task_alt",
+};
+
+async function refreshIntegrations(){
+  const d = await api("/api/integrations");
+  await refreshCompanies();   // needed for company-id dropdown in modal
+  const companyNameById = Object.fromEntries(COMPANIES.map(c=>[c.id,c.name]));
+  $("integrationsGrid").innerHTML = d.integrations.map(i=>{
+    const routeLine = (i.direction==="input"||i.direction==="both") && i.configured ?
+      `<div class="text-[10px] text-outline">→ ${i.default_company_id ? `company: <span class="text-tertiary">${companyNameById[i.default_company_id]||i.default_company_id}</span>` : 'personal graph'}</div>` : '';
+    const bcLine = (i.direction==="output"||i.direction==="both") && i.configured ?
+      `<div class="text-[10px] text-outline">${i.auto_broadcast ? '<span class="text-secondary">⚡ auto-broadcast ON</span>' : 'auto-broadcast off'}</div>` : '';
+    return `
+    <div class="luminous rounded-xl p-lg flex flex-col gap-md hover:border-primary/50 transition-all">
+      <div class="flex justify-between items-start">
+        <div class="flex items-center gap-md">
+          <div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center">
+            <span class="material-symbols-outlined text-primary">${ICONS[i.name]||"cable"}</span>
+          </div>
+          <div>
+            <h4 class="font-display font-bold">${i.label}</h4>
+            <p class="text-[10px] text-outline uppercase tracking-widest mt-1">${i.name}</p>
+          </div>
+        </div>
+        ${DIR_BADGE[i.direction]||""}
+      </div>
+      <div class="space-y-xs">
+        <div class="flex items-center gap-xs">
+          <span class="w-2 h-2 rounded-full ${i.configured?'bg-tertiary':'bg-outline'}"></span>
+          <span class="text-xs ${i.configured?'text-tertiary':'text-outline'}">${i.configured?'Configured':'Not configured'}</span>
+        </div>
+        ${routeLine}
+        ${bcLine}
+      </div>
+      <div class="flex gap-sm mt-auto">
+        <button onclick="openIntegration('${i.name}')" class="flex-1 bg-surface-container-high border border-outline-variant rounded-lg py-sm text-xs hover:bg-surface-container-highest">Configure</button>
+        <button onclick="quickProbe('${i.name}')" class="px-md bg-primary/10 text-primary border border-primary/30 rounded-lg py-sm text-xs hover:bg-primary/20">Test</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function openIntegration(name){
+  CURRENT_INT = name;
+  const d = await api("/api/integrations");
+  const meta = d.integrations.find(x=>x.name===name);
+  const cfg = (await api(`/api/integrations/${name}/config`)).config || {};
+  $("intModalTitle").innerHTML = `<span class="material-symbols-outlined text-primary align-middle">${ICONS[name]||"cable"}</span> ${meta.label} <span class="text-xs text-outline ml-sm">${DIR_BADGE[meta.direction]||""}</span>`;
+  // build companies dropdown options for default_company_id
+  const companyOpts = `<option value="">Personal graph (no company)</option>` +
+    COMPANIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
+  $("intModalFields").innerHTML = meta.config_schema.map(s=>{
+    const val = cfg[s.key] ?? s.default ?? (s.type==="bool"?true:"");
+    let tag;
+    if (s.type === "bool") {
+      const checked = (val === true || val === "true" || val === undefined) ? "checked" : "";
+      tag = `<label class="flex items-center gap-sm cursor-pointer"><input data-k="${s.key}" data-type="bool" type="checkbox" ${checked} class="w-4 h-4 rounded accent-primary"/><span class="text-sm">${s.label}</span></label>`;
+      return `<div class="bg-surface-container-high p-sm rounded-lg">${tag}</div>`;
+    } else if (s.key === "default_company_id") {
+      tag = `<select data-k="${s.key}" class="w-full bg-surface-container-lowest border border-outline-variant focus:border-primary rounded-lg px-md py-sm text-sm focus:outline-none">${companyOpts.replace(`value="${val}"`,`value="${val}" selected`)}</select>`;
+    } else if (s.textarea) {
+      tag = `<textarea rows="4" data-k="${s.key}" placeholder="${s.label}" class="w-full bg-surface-container-lowest border border-outline-variant focus:border-primary rounded-lg px-md py-sm text-sm font-mono-data focus:outline-none">${val}</textarea>`;
+    } else {
+      tag = `<input data-k="${s.key}" type="${s.secret?'password':'text'}" value="${val}" placeholder="${s.label}" class="w-full bg-surface-container-lowest border border-outline-variant focus:border-primary rounded-lg px-md py-sm text-sm font-mono-data focus:outline-none"/>`;
+    }
+    return `<div><label class="text-label-sm uppercase tracking-wider text-on-surface-variant block mb-xs">${s.label}${s.required?' <span class="text-error">*</span>':''}</label>${tag}</div>`;
+  }).join("");
+  $("intModalProbe").classList.add("hidden");
+  $("intSyncBtn").classList.toggle("hidden", !["input","both"].includes(meta.direction));
+  $("intModal").classList.remove("hidden"); $("intModal").classList.add("flex");
+}
+function closeIntModal(){$("intModal").classList.add("hidden"); $("intModal").classList.remove("flex");}
+function readModalConfig(){
+  const cfg={};
+  $("intModalFields").querySelectorAll("[data-k]").forEach(el=>{
+    if (el.dataset.type === "bool") cfg[el.dataset.k] = el.checked;
+    else cfg[el.dataset.k] = el.value;
+  });
+  return cfg;
+}
+async function saveIntegration(){
+  try{
+    await api(`/api/integrations/${CURRENT_INT}/config`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(readModalConfig())});
+    toast("Saved");
+    await refreshIntegrations();
+  }catch(e){toast(e.message,"err");}
+}
+async function probeIntegration(){
+  try{
+    // save first so probe uses latest values
+    await api(`/api/integrations/${CURRENT_INT}/config`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(readModalConfig())});
+    const r = await api(`/api/integrations/${CURRENT_INT}/health`, {method:"POST"});
+    const box = $("intModalProbe");
+    box.className = `mt-md p-md rounded-lg font-mono-data text-xs ${r.ok?'bg-tertiary/10 border border-tertiary/30 text-tertiary':'bg-error-container/30 border border-error/30 text-error'}`;
+    box.textContent = `${r.ok?'✓':'✗'} ${r.message}${r.data?'\n\n'+JSON.stringify(r.data,null,2):''}`;
+    box.classList.remove("hidden");
+    await refreshIntegrations();
+  }catch(e){toast(e.message,"err");}
+}
+async function quickProbe(name){
+  try{
+    const r = await api(`/api/integrations/${name}/health`, {method:"POST"});
+    toast(`${name}: ${r.ok?'✓ '+r.message:'✗ '+r.message}`, r.ok?"ok":"err");
+  }catch(e){toast(e.message,"err");}
+}
+async function syncIntegration(){
+  const limit = parseInt(prompt("How many docs to pull?","25")||"25");
+  if(!limit) return;
+  try{
+    const r = await api(`/api/integrations/${CURRENT_INT}/sync`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({limit})});
+    toast(`Pulled ${r.fetched} docs (${r.results.filter(x=>x.ok).length} ingested)`);
+    await refreshStatus();
+  }catch(e){toast(e.message,"err");}
+}
+
+// ═════════════ MCP SERVER ═════════════
+let MCP_TOOLS = [];
+let MCP_CURRENT = null;
+let MCP_CONFIG_CACHE = null;
+
+let MCP_PUBLIC_BASE = "";
+async function refreshMCP(){
+  try{
+    await refreshCompanies();   // so the company_id dropdown in Try is populated
+    const [status, toolsData, cfg, st] = await Promise.all([
+      api("/api/mcp/status"), api("/api/mcp/tools"), api("/api/mcp/config"), api("/api/status")
+    ]);
+    MCP_CONFIG_CACHE = cfg;
+    // status
+    const ok = status.active;
+    $("mcpDot").className = `w-3 h-3 rounded-full ${ok?'bg-tertiary':'bg-error'} ${ok?'':'animate-pulse'}`;
+    $("mcpStatusText").textContent = ok ? "Module loaded · ready to serve" : "Import failed";
+    $("mcpStatusDetail").textContent = ok ? `${status.tools_count} tools · HTTP (public) + stdio (local)` : (status.import_error||"unknown");
+    $("mcpPath").textContent = status.project_path;
+    $("mcpPython").textContent = status.python;
+    // remote (public) card
+    MCP_PUBLIC_BASE = (st.settings && st.settings.public_url) || window.location.origin;
+    $("mcpPublicBase").textContent = MCP_PUBLIC_BASE;
+    $("mcpCurl").textContent =
+      `# list tools\ncurl ${MCP_PUBLIC_BASE}/api/mcp/tools\n\n` +
+      `# call a tool\ncurl -X POST ${MCP_PUBLIC_BASE}/api/mcp/call/query_knowledge \\\n` +
+      `  -H "Content-Type: application/json" \\\n` +
+      `  -d '{"question":"What were our key decisions?"}'`;
+    // configs (local stdio)
+    $("mcpDesktop").textContent = JSON.stringify(cfg.desktop, null, 2);
+    $("mcpCli").textContent     = cfg.cli;
+    // tools
+    MCP_TOOLS = toolsData.tools || [];
+    $("mcpToolCount").textContent = `${MCP_TOOLS.length} tools`;
+    $("mcpToolsGrid").innerHTML = MCP_TOOLS.map(t=>{
+      const props = (t.inputSchema && t.inputSchema.properties) || {};
+      const required = new Set((t.inputSchema && t.inputSchema.required) || []);
+      const paramRows = Object.entries(props).map(([k,v])=>{
+        const req = required.has(k) ? '<span class="text-error">*</span>' : '';
+        return `<div class="flex justify-between gap-md text-[11px]"><span class="font-mono-data text-primary">${k}${req}</span><span class="text-on-surface-variant truncate text-right">${(v.description||v.type||"").slice(0,60)}</span></div>`;
+      }).join("") || `<div class="text-[11px] text-outline italic">no arguments</div>`;
+      return `<div class="luminous rounded-xl p-lg flex flex-col gap-md hover:border-primary/50 transition-all">
+        <div class="flex justify-between items-start gap-md">
+          <div>
+            <h5 class="font-mono-data font-bold text-primary">${t.name}</h5>
+            <p class="text-xs text-on-surface-variant mt-xs leading-relaxed">${t.description}</p>
+          </div>
+          <button onclick="openMcpTool('${t.name}')" class="flex-shrink-0 px-md py-sm bg-primary/10 text-primary border border-primary/30 rounded-lg text-xs hover:bg-primary/20 flex items-center gap-xs">
+            <span class="material-symbols-outlined text-[16px]">play_arrow</span>Try
+          </button>
+        </div>
+        <div class="border-t border-outline-variant pt-sm space-y-xs">${paramRows}</div>
+      </div>`;
+    }).join("");
+  }catch(e){
+    $("mcpStatusText").textContent = "Error loading MCP info";
+    $("mcpStatusDetail").textContent = e.message;
+    toast(e.message, "err");
+  }
+}
+
+function copyMCP(which){
+  let text, label;
+  if (which === "public") { text = MCP_PUBLIC_BASE; label = "Public URL"; }
+  else if (which === "desktop") { text = JSON.stringify(MCP_CONFIG_CACHE.desktop, null, 2); label = "Desktop config"; }
+  else { text = MCP_CONFIG_CACHE.cli; label = "CLI command"; }
+  navigator.clipboard.writeText(text).then(()=>toast(`${label} copied`));
+}
+
+function openMcpTool(name){
+  const t = MCP_TOOLS.find(x=>x.name===name); if(!t) return;
+  MCP_CURRENT = t;
+  $("mcpModalTitle").textContent = t.name;
+  $("mcpModalDesc").textContent  = t.description;
+  const props = (t.inputSchema && t.inputSchema.properties) || {};
+  const required = new Set((t.inputSchema && t.inputSchema.required) || []);
+  // company_id helper: populate as a dropdown from COMPANIES
+  const companyOpts = `<option value="">— (none, personal scope) —</option>` +
+    COMPANIES.map(c=>`<option value="${c.id}">${c.name} (${c.id})</option>`).join("");
+  if(Object.keys(props).length === 0){
+    $("mcpModalFields").innerHTML = `<div class="text-sm text-outline italic">This tool takes no arguments.</div>`;
+  } else {
+    $("mcpModalFields").innerHTML = Object.entries(props).map(([k,v])=>{
+      const req = required.has(k) ? ' <span class="text-error">*</span>' : '';
+      let inputEl;
+      if (k === "company_id") {
+        inputEl = `<select data-k="${k}" class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm text-sm focus:outline-none focus:border-primary">${companyOpts}</select>`;
+      } else if (v.enum) {
+        inputEl = `<select data-k="${k}" class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm text-sm focus:outline-none focus:border-primary">${v.enum.map(e=>`<option value="${e}">${e}</option>`).join("")}</select>`;
+      } else if (k === "question" || k === "context" || k === "answer" || k === "reasoning") {
+        inputEl = `<textarea data-k="${k}" rows="3" placeholder="${v.description||k}" class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm text-sm focus:outline-none focus:border-primary resize-none"></textarea>`;
+      } else {
+        inputEl = `<input data-k="${k}" type="text" placeholder="${v.description||k}" class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm text-sm font-mono-data focus:outline-none focus:border-primary"/>`;
+      }
+      return `<div>
+        <label class="text-label-sm uppercase tracking-wider text-on-surface-variant block mb-xs">${k}${req}</label>
+        ${inputEl}
+        <p class="text-[10px] text-outline mt-xs">${v.description||""}</p>
+      </div>`;
+    }).join("");
+  }
+  $("mcpModalResultWrap").classList.add("hidden");
+  $("mcpModal").classList.remove("hidden"); $("mcpModal").classList.add("flex");
+}
+
+function closeMcpModal(){ $("mcpModal").classList.add("hidden"); $("mcpModal").classList.remove("flex"); }
+
+async function runMcpTool(){
+  const args = {};
+  $("mcpModalFields").querySelectorAll("[data-k]").forEach(el=>{
+    const v = el.value.trim();
+    if(v) args[el.dataset.k] = v;
+  });
+  $("mcpRunBtn").disabled = true;
+  $("mcpModalResultWrap").classList.remove("hidden");
+  $("mcpModalResult").textContent = "Running…";
+  try{
+    const r = await api(`/api/mcp/call/${MCP_CURRENT.name}`, {
+      method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(args),
+    });
+    $("mcpModalResult").textContent = JSON.stringify(r.result, null, 2);
+  }catch(e){
+    $("mcpModalResult").textContent = `Error: ${e.message}`;
+  }finally{
+    $("mcpRunBtn").disabled = false;
+  }
+}
+
+// ═════════════ BOOT ═════════════
+async function refreshAll(){
+  const ok = await refreshStatus(); if(!ok) return;
+  await refreshCompanies();
+  if(CURRENT==="discussion") await refreshSessions();
+}
+(async()=>{
+  route("kb");
+  const ok = await refreshStatus();
+  if(!ok){
+    const creds = await fetch("/api/status").then(r=>r.json());
+    $("loginUrl").value   = creds.creds?.base_url || "";
+    $("loginModel").value = creds.creds?.model || "claude-sonnet-4-5";
+    return;
+  }
+  await refreshCompanies();
+})();
+</script>
+</body>
+</html>

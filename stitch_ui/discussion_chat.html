@@ -1,0 +1,289 @@
+﻿<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>DecisionGraph - Discussion</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline-variant": "#474554",
+                        "on-secondary-container": "#003e3e",
+                        "surface-dim": "#13121b",
+                        "surface": "#13121b",
+                        "tertiary-fixed": "#71fcb6",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary-fixed": "#002112",
+                        "surface-bright": "#3a3841",
+                        "on-primary-fixed-variant": "#4228bb",
+                        "surface-container-high": "#2a2932",
+                        "on-primary-fixed": "#180065",
+                        "on-error": "#690005",
+                        "on-surface": "#e5e0ed",
+                        "inverse-surface": "#e5e0ed",
+                        "inverse-on-surface": "#312f38",
+                        "surface-tint": "#c7bfff",
+                        "on-background": "#e5e0ed",
+                        "on-secondary": "#003737",
+                        "surface-container-highest": "#35343d",
+                        "primary": "#c7bfff",
+                        "outline": "#928ea0",
+                        "primary-fixed-dim": "#c7bfff",
+                        "on-primary-container": "#25008c",
+                        "surface-container-low": "#1c1b23",
+                        "error": "#ffb4ab",
+                        "secondary-fixed-dim": "#4ddada",
+                        "inverse-primary": "#5a46d3",
+                        "primary-container": "#8e7fff",
+                        "on-tertiary-container": "#00311d",
+                        "tertiary": "#51df9c",
+                        "primary-fixed": "#e4deff",
+                        "on-primary": "#2b009e",
+                        "error-container": "#93000a",
+                        "on-secondary-fixed": "#002020",
+                        "tertiary-fixed-dim": "#51df9c",
+                        "background": "#13121b",
+                        "surface-container-lowest": "#0e0d15",
+                        "on-secondary-fixed-variant": "#004f50",
+                        "on-tertiary-fixed-variant": "#005233",
+                        "secondary": "#4ddada",
+                        "on-surface-variant": "#c9c4d7",
+                        "secondary-container": "#00b3b3",
+                        "secondary-fixed": "#6ff7f6",
+                        "on-tertiary": "#003822",
+                        "surface-container": "#201f27",
+                        "tertiary-container": "#00a56b",
+                        "surface-variant": "#35343d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "xs": "4px",
+                        "margin": "32px",
+                        "xl": "40px",
+                        "gutter": "24px",
+                        "md": "16px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "display": ["Inter"],
+                        "label-sm": ["IBM Plex Sans"],
+                        "headline-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "mono-data": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-sm": ["13px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "mono-data": ["14px", {"lineHeight": "1.4", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .chat-bubble-agent { border-left: 4px solid #51df9c; }
+        .active-indicator { position: absolute; left: 0; width: 4px; height: 100%; background-color: #c7bfff; }
+    </style>
+<style data-stitch-cursor=""></style><style data-stitch-scroll-lock=""></style></head>
+<body class="bg-background text-on-background font-body-md overflow-hidden flex h-screen">
+<!-- Sidebar Navigation -->
+<aside class="fixed left-0 h-screen w-[280px] bg-surface border-r border-outline-variant flex flex-col p-md space-y-md">
+<div class="flex items-center gap-md px-sm py-md">
+<div class="w-10 h-10 bg-primary-container rounded-xl flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container" style="font-variation-settings: 'FILL' 1;">hub</span>
+</div>
+<div>
+<h1 class="font-display text-headline-md font-black text-primary leading-none">DecisionGraph</h1>
+<p class="text-[10px] uppercase tracking-widest text-outline mt-1">Institutional Memory OS</p>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary py-md px-lg rounded-xl font-bold flex items-center justify-center gap-sm transition-transform active:scale-[0.98] shadow-lg shadow-primary/10">
+<span class="material-symbols-outlined">add_circle</span>
+            New Analysis
+        </button>
+<nav class="flex-1 space-y-sm">
+<div class="flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer transition-all duration-200 active:scale-[0.98]">
+<span class="material-symbols-outlined">database</span>
+<span class="font-body-md">Knowledge Base</span>
+</div>
+<div class="flex items-center gap-md bg-secondary-container text-on-secondary-container rounded-xl p-md border-l-4 border-primary cursor-pointer transition-all duration-200 active:scale-[0.98]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">forum</span>
+<span class="font-body-md">Discussion</span>
+</div>
+<div class="flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer transition-all duration-200 active:scale-[0.98]">
+<span class="material-symbols-outlined">search</span>
+<span class="font-body-md">Query</span>
+</div>
+<div class="flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer transition-all duration-200 active:scale-[0.98]">
+<span class="material-symbols-outlined">hub</span>
+<span class="font-body-md">Graph Visualizer</span>
+</div>
+</nav>
+<div class="pt-md border-t border-outline-variant space-y-sm">
+<div class="flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer">
+<span class="material-symbols-outlined">settings_input_component</span>
+<span class="font-body-md">LLM Settings</span>
+</div>
+<div class="flex items-center gap-md text-on-surface-variant p-md hover:bg-surface-container-high rounded-xl cursor-pointer">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-body-md">System Status</span>
+</div>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="ml-[280px] flex-1 flex flex-col h-screen bg-surface-lowest">
+<!-- Top Navigation Area (Contextual Top Bar) -->
+<header class="bg-surface-container-low border-b border-outline-variant px-margin py-md flex items-center justify-between">
+<div class="flex items-center gap-lg">
+<div class="flex flex-col">
+<span class="text-[10px] text-outline font-bold uppercase tracking-tighter">Active Session</span>
+<input class="bg-transparent border-none p-0 focus:ring-0 font-display text-headline-md text-on-surface w-64" type="text" value="Quarterly Strategic Alignment">
+</div>
+<div class="h-8 w-[1px] bg-outline-variant"></div>
+<div class="flex bg-surface-container-highest p-1 rounded-full">
+<button class="px-lg py-sm rounded-full text-label-sm transition-colors bg-primary text-on-primary shadow-sm">SESSION</button>
+<button class="px-lg py-sm rounded-full text-label-sm transition-colors text-on-surface-variant hover:text-on-surface">FAST</button>
+<button class="px-lg py-sm rounded-full text-label-sm transition-colors text-on-surface-variant hover:text-on-surface">DEEP</button>
+</div>
+</div>
+<div class="flex items-center gap-lg">
+<div class="flex flex-col items-end">
+<span class="text-label-sm font-mono-data text-primary">00:14:32</span>
+<span class="text-[10px] text-outline uppercase">Elapsed Time</span>
+</div>
+<button class="bg-error-container text-on-error-container px-lg py-sm rounded-xl font-bold flex items-center gap-xs hover:bg-error transition-colors active:scale-95">
+<span class="material-symbols-outlined text-[18px]">stop_circle</span>
+                    End Session
+                </button>
+</div>
+</header>
+<!-- Chat Body -->
+<div class="flex-1 overflow-y-auto scrollbar-hide px-margin py-xl space-y-xl">
+<!-- User Message -->
+<div class="flex justify-end">
+<div class="max-w-2xl bg-primary-container text-on-primary-container p-lg rounded-2xl rounded-tr-none shadow-xl border border-primary/20">
+<p class="font-body-md leading-relaxed">How do our current R&amp;D investments align with the Board's Jan decisions?</p>
+<div class="mt-sm flex justify-end">
+<span class="text-[10px] font-mono-data opacity-70">14:28 PM â¢ Administrator</span>
+</div>
+</div>
+</div>
+<!-- Agent Message -->
+<div class="flex justify-start">
+<div class="flex gap-md max-w-3xl">
+<div class="flex-shrink-0 w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+</div>
+<div class="space-y-md">
+<div class="bg-surface-container-high border border-outline-variant p-lg rounded-2xl rounded-tl-none chat-bubble-agent shadow-md">
+<p class="font-body-md leading-relaxed text-on-surface">Based on the Board Minutes from Jan 15th, your R&amp;D focus on edge computing aligns with the decision to prioritize infrastructure scalability. I've matched the "Infrastructure" and "Product Roadmap" communities.</p>
+<div class="mt-md flex flex-wrap gap-sm">
+<span class="bg-secondary-container/20 text-secondary border border-secondary/30 px-sm py-xs rounded-full text-[12px] font-mono-data">#Infrastructure</span>
+<span class="bg-secondary-container/20 text-secondary border border-secondary/30 px-sm py-xs rounded-full text-[12px] font-mono-data">#ProductRoadmap</span>
+</div>
+</div>
+<!-- Thinking Indicator -->
+<div class="flex items-center gap-sm text-outline animate-pulse">
+<span class="material-symbols-outlined text-[18px]">neurology</span>
+<span class="text-label-sm italic">DecisionGraph is thinking...</span>
+<div class="flex gap-1">
+<div class="w-1 h-1 bg-outline rounded-full"></div>
+<div class="w-1 h-1 bg-outline rounded-full"></div>
+<div class="w-1 h-1 bg-outline rounded-full"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Session Summary Card (Mockup) -->
+<div class="max-w-4xl mx-auto pt-xl">
+<div class="bg-surface-container border border-outline-variant rounded-2xl overflow-hidden shadow-2xl">
+<div class="bg-surface-container-highest px-lg py-md border-b border-outline-variant flex justify-between items-center">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary">description</span>
+<h3 class="font-display font-bold text-on-surface">Session Summary</h3>
+</div>
+<span class="bg-surface-container-low text-outline px-sm py-xs rounded text-[11px] font-mono-data border border-outline-variant">ID: DS-9921-X</span>
+</div>
+<div class="p-lg grid grid-cols-1 md:grid-cols-3 gap-lg">
+<div class="space-y-md">
+<div class="flex flex-col">
+<span class="text-[10px] text-outline uppercase font-bold">Duration</span>
+<span class="text-body-md font-mono-data">45m</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] text-outline uppercase font-bold">Key Decisions</span>
+<ul class="mt-xs space-y-xs">
+<li class="flex items-start gap-xs text-on-surface-variant text-label-sm">
+<span class="material-symbols-outlined text-tertiary text-[16px]">check_circle</span>
+                                        Approved Edge Computing pilot
+                                    </li>
+<li class="flex items-start gap-xs text-on-surface-variant text-label-sm">
+<span class="material-symbols-outlined text-error text-[16px]">pause_circle</span>
+                                        Deferred VR research
+                                    </li>
+</ul>
+</div>
+</div>
+<div class="md:col-span-2 space-y-md">
+<div class="flex flex-col">
+<span class="text-[10px] text-outline uppercase font-bold">Summary text</span>
+<p class="text-on-surface-variant text-label-sm leading-relaxed mt-xs">A productive alignment session focused on hardware infrastructure. The conversation established clear links between R&amp;D expenditure and the Q1 strategic pillars defined by the board.</p>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] text-outline uppercase font-bold">Open Questions</span>
+<div class="bg-surface-container-low border border-dashed border-outline-variant p-sm rounded-xl mt-xs">
+<span class="text-primary text-label-sm italic">"Next steps for hardware vendor?"</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Chat Input Area -->
+<footer class="px-margin py-lg bg-surface-container-low border-t border-outline-variant">
+<div class="max-w-5xl mx-auto relative group">
+<input class="w-full bg-surface-container-high border border-outline-variant rounded-2xl px-xl py-md text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary focus:border-transparent transition-all pr-16" placeholder="Type your message..." type="text">
+<div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-md">
+<button class="p-sm text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined">attach_file</span>
+</button>
+<button class="bg-primary text-on-primary p-sm rounded-xl hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-90">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">send</span>
+</button>
+</div>
+</div>
+<p class="text-center text-[10px] text-outline mt-sm uppercase tracking-widest">DecisionGraph Memory System | Institutional Integrity Verified</p>
+</footer>
+</main>
+<!-- Modal Mockup (Floating Element Shadow Reference) -->
+<div class="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center pointer-events-none opacity-0">
+<!-- Hidden by default, just demonstrating shadow styles in code if needed -->
+</div>
+
+
+</body></html>
