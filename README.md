@@ -74,23 +74,269 @@ Each one is independent. Start only the ones the feature you use needs.
 
 ---
 
-## 2. The three projects, one-line each
+## 2. The three projects — full breakdown
 
-### DecisionGraph
-**The Operating System for Institutional Memory.** FastAPI app + Python library. Ingest
-PDFs / URLs / GitHub repos / decisions into a dual graph (semantic + structural),
-queryable via REST or via MCP from any agent.
+### 2.1 DecisionGraph
 
-### AgentNet
-**Sandboxed agent runtime.** Scoped, time-limited grants. Signed audit ledger. Agent
-reputation. Inter-agent message bus. The substrate the OS uses so multiple agents can
-write to a shared workspace safely.
+**The Operating System for Institutional Memory.** A FastAPI app and Python library
+that turns documents, codebases, URLs, and free-form decisions into a queryable
+graph the rest of the stack reads from. The substrate underneath everything else.
 
-### DG Mission Control
-**Agentic OS that turns one prompt into a working full-stack app.** A dispatcher LLM
-reads a 1,200-line master prompt, decomposes a task per feature, picks from 63 agent
-personas + 250 skill modules + 115 rule sets, builds the site, self-corrects compile
-errors, and ingests the result back into DG as long-term memory.
+**Core capabilities**
+* **Dual graph backend.** A NetworkX *knowledge graph* (built from LLM-extracted
+  triples, entity-resolved via cosine on sentence-transformer embeddings, then
+  partitioned by Louvain community detection and summarized by the LLM) sits
+  alongside a deterministic *code graph* (tree-sitter AST in SQLite, with proper
+  import-scope resolution, call edges, imports, inheritance, and inline-rationale
+  capture). The two answer different questions and are kept as first-class peers.
+* **Multi-tenant by design.** Every visitor gets an isolated workspace rooted at
+  `storage/workspaces/<token>/` — its own DG instance, decision graph, code graph
+  DB, and locks. Concurrent ingests in different workspaces never block each
+  other. The SentenceTransformer embedding model is loaded **once process-wide**
+  and shared read-only across all workspaces so N visitors don't mean N model
+  copies in RAM.
+* **Polyglot ingest pipeline.** Native handlers for PDF, Markdown, DOCX, plain
+  text, URLs, YouTube transcripts, audio/video media, and full GitHub
+  repositories (shallow-clone → tree-sitter chunking → per-file LLM summary →
+  call-graph extraction → PR capture → blueprint markdown → DG ingest).
+  Parallel triple extraction (10 in-flight LLM calls via `ThreadPoolExecutor`)
+  with **checkpoint-resume** — crash mid-ingest, resume from the last batch.
+* **Decision provenance.** Every decision carries `question`, `answer`,
+  `reasoning_summary`, `communities_used`, `confidence`, `outcome`,
+  `outcome_impact`, `access_count`, and a `decay` signal. You can `supersede`
+  old decisions, `mark_outcome` after the fact, run a `decay` pass to age out
+  unused entries, and replay them as eval sets.
+* **Dream / consolidation cycle.** A periodic background pass re-runs community
+  detection, re-summarizes drifted clusters, and promotes high-confidence /
+  high-impact decisions into reusable "wisdom" entries. Turns ephemeral facts
+  into long-term patterns.
+* **30 MCP tools.** Native stdio MCP server (see §7 for the full list) — agents
+  call `recall`, `query`, `find_callers`, `blast_radius`, `topology`,
+  `track_decision`, `track_code_edit`, `ingest_github`, etc., directly during
+  reasoning.
+* **REST + Web UI.** FastAPI exposes 50+ endpoints; the Stitch UI bundles a
+  graph visualizer, query mode, deep-research mode, decision memory browser,
+  discussion sessions, and a Companies hub for cross-team memory.
+* **Federated code graph.** `federated_callers`, `federated_topology`, and
+  `federated_rationale_search` operate across multiple workspaces or repos
+  simultaneously — org-wide refactor risk in a single call.
+* **DG extensions beyond a normal graph.** `causal_radius` combines structural
+  impact with related decisions/PRs/ADRs; `rationales` surfaces inline
+  `# WHY:` / `# HACK:` / `# SAFETY:` comments as first-class graph nodes
+  linked to symbols; `triage_pr` scores PR risk by fusing blast-radius +
+  god-node touches + rationale warnings into a 0–100 score with a merge-order
+  hint; `get_onboarding_brief` returns a one-shot "what to know" bundle for a
+  new joiner or new AI session.
+* **Durable job queue.** Long-running ingests (GitHub repo with hundreds of
+  files, large PDFs) run as queued jobs in a SQLite-backed worker; the browser
+  polls `/api/jobs/<id>` for progress. Crash-safe with `_recover()` on boot.
+* **External integrations.** Slack, Jira, Notion, Confluence, SharePoint,
+  Google Workspace, Supabase — read decisions, post updates, broadcast wisdom.
+* **Rate limiting & circuit breakers.** Per-workspace sliding-window limits
+  on ingest / simulation / query buckets, plus a global LLM-cost gate.
+* **Backup & restore.** `BACKUP_RESTORE.md` documents the procedure;
+  `/api/workspace/export` produces a portable archive.
+* **Simulation + forecasting hooks.** First-class clients for Mirofish
+  (Simulation Studio) and TimesFM (time-series forecasting), exposed via
+  `/api/simulation/*` and `/api/forecast/*`.
+
+**Code:** `decisiongraph/` package, `server.py`. Architecture deep-dive in
+`ARCHITECTURE.md`; reference in `DOCUMENTATION.md`.
+
+---
+
+### 2.2 AgentNet
+
+**Sandboxed agent runtime.** The safety layer that lets multiple agents act on
+the same workspace without trampling each other. Lives inside the DG package
+(`decisiongraph/agent_*.py`) with extended runtime + UI assets in `agentnet/`.
+
+**Core capabilities**
+* **Scoped, time-limited grants.** A grant is a signed token saying *"agent X
+  may write to topics ['src/', 'tests/'], expires 2026-06-01T12:34Z."* Grants
+  are minted per-task by the kernel, audited on every use, and auto-revoked at
+  expiry.
+* **Signed audit ledger.** Every grant mint, every tool call, every file edit,
+  every decision logged — signed with the agent's key, replayable. You can
+  reconstruct exactly what an agent did, when, and why.
+* **Agent reputation.** Each agent carries a reputation score that decays on
+  failures and rises on successful outcomes. A **circuit breaker** trips
+  after `maxConsecutiveFailures`, blocking the agent until cooldown.
+* **Inter-agent message bus.** Agents pass typed messages to each other
+  (`post_message`, `read_messages`, `wait_for_message`) — supports
+  request/response, broadcast, and async coordination.
+* **Job marketplace.** `agent_job` exposes a registry of pending tasks
+  agents can claim; reputation-weighted dispatch ensures the best-suited
+  agent wins.
+* **Agent sandbox.** Per-agent filesystem isolation (`agent_sandbox`) and a
+  capability-gated tool palette — agents only see the tools their grant
+  allows.
+* **Agent catalog & crypto.** `agent_catalog` lists every registered agent
+  with their capabilities; `agent_crypto` handles keypair generation,
+  message signing, and grant validation.
+* **Network registry.** `agent_network` is the directory service — discover
+  agents by capability, query their reputation, route messages.
+* **UI hooks.** `agentnet/ui/` contains preview UI components for agent
+  inspection (see `agentnet/IDE_INTEGRATION.md`).
+
+**Code:** `decisiongraph/agent.py`, `decisiongraph/agent_access.py`,
+`decisiongraph/agent_catalog.py`, `decisiongraph/agent_crypto.py`,
+`decisiongraph/agent_job.py`, `decisiongraph/agent_messages.py`,
+`decisiongraph/agent_network.py`, `decisiongraph/agent_reputation.py`,
+`decisiongraph/agent_sandbox.py`, plus the `agentnet/` folder.
+
+---
+
+### 2.3 DG Mission Control
+
+**An Agentic OS that turns one prompt into a working full-stack app.** You type
+*"Build a website for a tea house named Steep — hero, menu, gallery,
+reservation form."* and an LLM dispatcher decomposes the task per feature,
+picks the right agents and skills, builds the site, self-corrects compile
+errors, and ingests the result into DG as long-term memory — all live on a
+cinematic dashboard.
+
+**Core capabilities**
+
+*Dispatcher (LLM-driven, prompt-owned)*
+* **1,200-line master prompt** (`ecc/DISPATCHER_PROMPT.md`) defines the
+  decomposition protocol, dependency chain (PLAN → DATA → BACKEND → FRONTEND
+  → SECURE → TEST → DEPLOY → DOCUMENT), section catalog (A–O), section-
+  conflict resolution rules, language auto-detection, edge cases, and
+  mandatory rules.
+* **Domain-matched planner.** The dispatcher picks `architect` for software,
+  `marketing-agent` for campaigns, `mle-reviewer` for data pipelines,
+  `gan-planner` for product specs — not always `architect`.
+* **Per-feature decomposition.** A hard rule in the prompt forces one
+  subtask per named feature ("hero", "menu", "gallery", "reservation form")
+  instead of stamping a generic "FRONTEND" step.
+* **Multi-skill per agent.** Each subtask carries 3–6 relevant skills, not
+  one — `frontend-patterns + react-patterns + design-system + accessibility`,
+  not just `frontend-patterns`.
+* **Stronger model for dispatch only.** `DISPATCH_MODEL` is configurable
+  separately from `BUILD_MODEL` — run the decomposition on a smarter model
+  (one call) while keeping the per-file builder cheap.
+
+*ECC capability catalog*
+* **537-entry catalog** (`ecc/TASK_CATALOG.md`, generated by `gen_catalog.py`):
+  63 agent personas + 250 skill modules + 79 commands + 115 rules + hooks,
+  contexts, schemas, integrations, plugins.
+* **Persona body injection.** The builder doesn't just see a name; it gets
+  the persona's full `agents/<name>.md` body as its system identity.
+* **Skill body injection.** Each chosen skill's `SKILL.md` content is loaded
+  into the prompt — real know-how, not one-line blurbs.
+* **Rule glob matching.** Rules apply deterministically by file-path glob
+  (e.g. `**/*.tsx → react/patterns`) — no LLM guessing.
+
+*Builder (`decisiongraph/llm_executor.py`)*
+* **Persona-driven.** Writes code AS the chosen persona, applying its
+  skills, following its rules.
+* **One file per call.** Each subtask file gets its own LLM call (no
+  multi-file marker corruption).
+* **Validation gate.** Rejects fragments, truncated files (unbalanced
+  `{}/[]`, mid-statement endings, stray protocol markers) and re-prompts.
+* **Retry-with-backoff + per-request timeout.** Survives proxy flaps;
+  forces fresh connections per request to avoid keep-alive drops.
+
+*Common CAG memory*
+* **Cumulative blueprint.** After each subtask, the written files'
+  signatures + exported shapes are appended to a shared `blueprint.md`
+  that future subtasks see — so later steps don't re-invent the data
+  layer the earlier step already wrote.
+* **Cross-file shape contract.** The blueprint surfaces exported
+  TypeScript types, function signatures, Prisma schema, data shapes —
+  so a `Menu.tsx` consuming `menu.ts` sees the *actual* keys, not a
+  guessed shape.
+
+*Self-correcting boot gate*
+* **`npm install` + auto-deps.** Scans every generated file's imports,
+  diffs against `package.json`, adds anything missing (`zod`, `vitest`,
+  `@testing-library/react`, etc.), reinstalls.
+* **`tsc --noEmit` compile check.** Lists every file with errors.
+* **`build-error-resolver` agent loop.** For each erroring file: full
+  current contents + the exact error lines + the cross-file shape
+  surface from CAG → the agent rewrites the file. Up to 3 rounds.
+* **Monotonic guard.** If a round *increases* the error count vs. the
+  previous round, the loop reverts to the previous best state and stops.
+  Never keeps a regressive fix.
+
+*OS-owned scaffold (`decisiongraph/scaffold.py`)*
+* **Per-stack template registry.** Next.js boot files (`package.json`
+  with pinned compatible versions, `tsconfig.json`, `next.config.js`,
+  `tailwind.config.ts`, `postcss.config.js`, `jest.config.js`,
+  `layout.tsx`, `globals.css`) emitted deterministically — never LLM-
+  guessed.
+* **Owned-file enforcement.** Scaffold OVERWRITES anything an agent
+  wrote for these files (an agent inventing a `layout.tsx` with
+  phantom imports = no longer breaks the build).
+* **Recursive homepage assembly.** If the dispatcher emits components
+  but no `page.tsx` that mounts them, scaffold synthesizes one by
+  scanning `src/components/` (recursively).
+* **Path normalization (`_norm`).** Coerces stray roots
+  (`app/`, `pages/`, `components/`, `workspace/`) into the canonical
+  `src/` layout so detection works regardless of what the dispatcher chose.
+
+*DG integration (the OS becomes self-aware)*
+* **Decision sync (`dg_sync.py`).** Every subtask's outcome is posted to
+  DG via `track_decision` MCP — what was built, by which agent, with
+  which skills, status.
+* **Knowledge-graph ingest (`dg_local_ingest.py` + `codebase_local.py`).**
+  After build, the OS runs the SAME blueprint pipeline DG uses for
+  GitHub repos — but pointed at the local built site. Adds the
+  project's nodes/edges/communities to the workspace's knowledge graph.
+* **Persistent memory.** Multiple builds **accumulate** in one graph.
+  Build #1's flower-delivery concepts, build #2's coffee-shop concepts,
+  build #3's tea-house concepts coexist — you can ask DG *"show me
+  everything I've ever built with Next.js + Prisma"*.
+
+*Live cinematic dashboard (`dashboard/`)*
+* **Mission Control screen.** Force-directed DAG of subtasks with
+  curved SVG bezier connectors, glowing data packets flowing between
+  nodes, box-by-box ignition animation as each agent starts, ripple
+  rings around the active node, light-sweep on the running card,
+  status icons (✔ done / ↻ running / ⧗ pending / ⚠ error).
+* **Live agent terminals.** Each active agent gets a card with avatar,
+  agent name, status pill, skill tags, files-written counter, live
+  token counter, and a scrolling terminal showing `[AUTH]`/`[TRACE]`/
+  `[IO]`/`[WARN]` log lines.
+* **Particle network background** with cyan/violet aurora gradients
+  that drift slowly.
+* **Tile metrics** — task type, subtask progress (4/8), code graph
+  nodes·edges, CAG file count, scaffold stack, boot-gate status,
+  elapsed seconds.
+* **Self-correction timeline.** Per-round error counts and revert
+  events shown as a vertical log.
+* **Graph Viewer screen.** Reads `graph_clean.pkl` and
+  `decision_graph.pkl` **directly off disk** via a same-origin
+  endpoint on the dashboard server — completely bypasses DG's
+  workspace cache so you always see what's actually persisted.
+* **Catalog browser** — searchable tabs for the 537 ECC entries
+  (Agents, Skills, Commands, Rules, …).
+* **Subtask Trace screen** — drill into any node to see its
+  persona, skills, rules, and files written.
+* **Use Cases launcher** — 6 domain cards (Build Software / Marketing /
+  Product Spec / Data Pipeline / Research Report / Ops & Comms).
+* **Launch screen** with a Dispatch button that POSTs to `/launch`
+  on the dashboard server and spawns `os_build.py` in the background.
+
+*Multi-domain capable*
+* The dispatcher routes **non-code tasks** (marketing campaigns,
+  research reports, PRDs) to domain-native pipelines (e.g.
+  AUDIENCE → POSITIONING → CHANNEL-PLAN → ASSETS → CALENDAR for
+  marketing) — scaffold and boot-gate auto-skip when the task isn't
+  software.
+
+**Proven builds:** Aperture photography studio, Bloom flower delivery,
+Steep tea house, Slurp ramen, Crumb bakery, Hops brewery, Ember coffee
+roastery, Margins bookstore, Paws pet adoption shelter, TaskFlow
+Trello-clone (Prisma + Postgres) — each compiled to HTTP 200 with
+30–77 indexed symbols and 100–330 call edges per build.
+
+**Code:** `os_build.py`, `dashboard_server.py`, `dashboard/`, `ecc/`
+(catalog + prompts), and OS modules inside `decisiongraph/`:
+`kernel.py`, `kernel_cag.py`, `dispatcher.py`, `scaffold.py`,
+`llm_executor.py`, `run_state.py`, `catalog.py`, `context_pack.py`,
+`dg_sync.py`, `dg_local_ingest.py`, `codebase_local.py`.
 
 ---
 
