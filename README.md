@@ -78,70 +78,200 @@ Each one is independent. Start only the ones the feature you use needs.
 
 ### 2.1 DecisionGraph
 
-**The Operating System for Institutional Memory.** A FastAPI app and Python library
-that turns documents, codebases, URLs, and free-form decisions into a queryable
-graph the rest of the stack reads from. The substrate underneath everything else.
+#### What it is, in one sentence
+**A long-term memory you can plug into any AI agent or team.** You feed it
+documents, code, websites, or just notes about decisions you made — and it
+remembers them in a way an AI can search, reason about, and build on later.
 
-**Core capabilities**
-* **Dual graph backend.** A NetworkX *knowledge graph* (built from LLM-extracted
-  triples, entity-resolved via cosine on sentence-transformer embeddings, then
-  partitioned by Louvain community detection and summarized by the LLM) sits
-  alongside a deterministic *code graph* (tree-sitter AST in SQLite, with proper
-  import-scope resolution, call edges, imports, inheritance, and inline-rationale
-  capture). The two answer different questions and are kept as first-class peers.
-* **Multi-tenant by design.** Every visitor gets an isolated workspace rooted at
-  `storage/workspaces/<token>/` — its own DG instance, decision graph, code graph
-  DB, and locks. Concurrent ingests in different workspaces never block each
-  other. The SentenceTransformer embedding model is loaded **once process-wide**
-  and shared read-only across all workspaces so N visitors don't mean N model
-  copies in RAM.
-* **Polyglot ingest pipeline.** Native handlers for PDF, Markdown, DOCX, plain
-  text, URLs, YouTube transcripts, audio/video media, and full GitHub
-  repositories (shallow-clone → tree-sitter chunking → per-file LLM summary →
-  call-graph extraction → PR capture → blueprint markdown → DG ingest).
-  Parallel triple extraction (10 in-flight LLM calls via `ThreadPoolExecutor`)
-  with **checkpoint-resume** — crash mid-ingest, resume from the last batch.
-* **Decision provenance.** Every decision carries `question`, `answer`,
-  `reasoning_summary`, `communities_used`, `confidence`, `outcome`,
-  `outcome_impact`, `access_count`, and a `decay` signal. You can `supersede`
-  old decisions, `mark_outcome` after the fact, run a `decay` pass to age out
-  unused entries, and replay them as eval sets.
-* **Dream / consolidation cycle.** A periodic background pass re-runs community
-  detection, re-summarizes drifted clusters, and promotes high-confidence /
-  high-impact decisions into reusable "wisdom" entries. Turns ephemeral facts
-  into long-term patterns.
-* **30 MCP tools.** Native stdio MCP server (see §7 for the full list) — agents
-  call `recall`, `query`, `find_callers`, `blast_radius`, `topology`,
-  `track_decision`, `track_code_edit`, `ingest_github`, etc., directly during
+#### Why it exists — the problem it solves
+AI agents have a memory problem. Every new chat starts from zero. They've never
+seen your codebase, never read your docs, don't know what your team decided
+last quarter. So they guess — and guess wrong.
+
+Vector databases help, but only a little. A vector search returns *"things
+that sound similar to your question"* — not *"things that are actually
+related to the question you asked."* It can't tell you who calls a function,
+what breaks if you change one, or what you decided about authentication six
+months ago.
+
+DecisionGraph solves this by **building two graphs side by side**:
+* A **knowledge graph** — concepts and how they connect (what an LLM "reads
+  about" your data).
+* A **code graph** — the actual structure of your code (who calls what, what
+  imports what, what breaks if you touch it).
+
+Then it stores every decision your team or AI makes as a **first-class
+memory node** with the reasoning, confidence, and outcome attached. So six
+months later you can ask *"why did we pick JWT over sessions?"* and get the
+real answer, not a hallucination.
+
+#### What it does — features in plain language
+
+**For your documents and notes**
+* **Drop in anything** — PDFs, Markdown files, Word docs, websites, YouTube
+  videos, audio/video files, even an entire GitHub repository. DG turns each
+  one into a graph of concepts.
+* **Resume on crash** — ingesting a big repo? If your laptop crashes
+  midway, just run it again. It picks up where it left off.
+* **Multiple users at once** — every visitor gets their own private
+  workspace. Your data never mixes with anyone else's.
+
+**For your code**
+* **Who calls this function?** — get an answer in milliseconds, across
+  the entire repo.
+* **What breaks if I change this?** — DG walks the call graph backwards and
+  tells you every file that depends on the one you're about to edit.
+* **Find the chain from A to B** — show me how `signup_handler` reaches
+  `send_welcome_email`, step by step.
+* **Spot dead code, god-nodes, weird connections** — DG flags the
+  500-call chokepoint files, the orphan modules nobody uses, the
+  cross-folder edges that look suspicious.
+* **Track every AI edit** — when an agent changes a file, DG logs *who*
+  changed it, *when*, *where* in the file, and *why*. Permanent audit trail.
+
+**For your decisions**
+* **Save the decision and the reasoning.** Not just *"we chose JWT"* but
+  *"we chose JWT because our microservices need stateless auth — discussed
+  with the eng team on May 12, trade-off was the revoke story."*
+* **Find similar past decisions before making a new one.** DG searches
+  your decision history before you re-invent something you already
+  solved.
+* **Mark outcomes after the fact.** Did the decision work? Did it
+  backfire? DG learns from both.
+* **Age out stale decisions** so old guesses don't pollute new
   reasoning.
-* **REST + Web UI.** FastAPI exposes 50+ endpoints; the Stitch UI bundles a
-  graph visualizer, query mode, deep-research mode, decision memory browser,
-  discussion sessions, and a Companies hub for cross-team memory.
-* **Federated code graph.** `federated_callers`, `federated_topology`, and
-  `federated_rationale_search` operate across multiple workspaces or repos
-  simultaneously — org-wide refactor risk in a single call.
-* **DG extensions beyond a normal graph.** `causal_radius` combines structural
-  impact with related decisions/PRs/ADRs; `rationales` surfaces inline
-  `# WHY:` / `# HACK:` / `# SAFETY:` comments as first-class graph nodes
-  linked to symbols; `triage_pr` scores PR risk by fusing blast-radius +
-  god-node touches + rationale warnings into a 0–100 score with a merge-order
-  hint; `get_onboarding_brief` returns a one-shot "what to know" bundle for a
-  new joiner or new AI session.
-* **Durable job queue.** Long-running ingests (GitHub repo with hundreds of
-  files, large PDFs) run as queued jobs in a SQLite-backed worker; the browser
-  polls `/api/jobs/<id>` for progress. Crash-safe with `_recover()` on boot.
-* **External integrations.** Slack, Jira, Notion, Confluence, SharePoint,
-  Google Workspace, Supabase — read decisions, post updates, broadcast wisdom.
-* **Rate limiting & circuit breakers.** Per-workspace sliding-window limits
-  on ingest / simulation / query buckets, plus a global LLM-cost gate.
-* **Backup & restore.** `BACKUP_RESTORE.md` documents the procedure;
-  `/api/workspace/export` produces a portable archive.
-* **Simulation + forecasting hooks.** First-class clients for Mirofish
-  (Simulation Studio) and TimesFM (time-series forecasting), exposed via
-  `/api/simulation/*` and `/api/forecast/*`.
 
-**Code:** `decisiongraph/` package, `server.py`. Architecture deep-dive in
-`ARCHITECTURE.md`; reference in `DOCUMENTATION.md`.
+**For AI agents (Claude Code, Cursor, Antigravity)**
+* **30 ready-made tools** the agent can call directly during a
+  conversation. Want the AI to ask DG *"who calls this function?"*
+  mid-task? It just does — no glue code, no integration work. See §7
+  for the full list.
+* **Onboarding brief in one call.** A new AI session starts already
+  knowing what's in the repo, what was decided recently, who's been
+  editing what.
+
+**For teams**
+* **Multi-tenant company memory.** Each company gets its own knowledge
+  hub — shared across the team but isolated from other companies.
+* **Federated queries across repos.** *"Show me every place
+  `validate_token` is called across all 5 of our repos"* — one call.
+* **PR risk scoring.** Hand DG a list of changed files; get back a
+  0–100 risk score, a list of files that could break, and a
+  recommended merge order.
+* **Inline "# WHY:" comments become memory.** Drop a `# WHY:` or
+  `# HACK:` or `# SAFETY:` comment in your code — DG captures it as
+  a first-class node linked to the symbol. The tribal knowledge that
+  usually dies in a code review now lives in the graph forever.
+
+**For long-running work**
+* **Background jobs survive crashes.** Big ingests run in a durable
+  queue; if the server restarts, jobs resume.
+* **Periodic "dream cycle"** that re-organizes the graph in the
+  background — clustering related concepts, summarizing them,
+  promoting frequently-used decisions into reusable "wisdom" patterns.
+
+**For your existing tools**
+* **Integrations** with Slack, Jira, Notion, Confluence, SharePoint,
+  Google Workspace, and Supabase — pull decisions in, push wisdom
+  out, broadcast events.
+* **Simulation & forecasting** — DG hosts a Simulation Studio
+  (via Mirofish on port 5001) and time-series forecasting (via
+  TimesFM on port 5002).
+
+**For ops**
+* **Backup & restore** — one command to export your workspace,
+  one to import it.
+* **Rate limiting & circuit breakers** — protects against runaway
+  LLM cost or accidental DoS from a misbehaving agent.
+
+---
+
+#### Technical depth (for engineers)
+
+If you want to understand *how* it actually works under the hood:
+
+* **Dual graph backend.** The semantic graph is a `networkx.MultiDiGraph`
+  built from LLM-extracted (subject, relation, object) triples; entity
+  resolution merges synonyms via cosine similarity on
+  sentence-transformer embeddings (`all-MiniLM-L6-v2`); communities are
+  detected with Louvain (`python-louvain`), then each cluster is named by
+  the LLM in one shot. The structural graph is a SQLite DB populated by
+  tree-sitter ASTs with proper import-scope resolution, storing
+  `symbols`, `calls`, `imports`, `inherits`, and `rationales`.
+
+* **Multi-tenant isolation.** `WorkspaceManager` lazily mints per-visitor
+  workspaces at `storage/workspaces/<token>/`. Each carries its own
+  `DecisionGraph` + `EnterpriseHub` + `DiscussionManager` and a
+  `threading.RLock`. The embedding model is loaded once process-wide
+  (`get_shared_embed_model()`) and shared read-only — without this,
+  N visitors = N model copies = OOM at the first dozen users.
+
+* **Ingest pipeline.** `core.DecisionGraph.ingest(path)` →
+  `ingest.chunk_text` → parallel `extract_triples_safe` via
+  `ThreadPoolExecutor(max_workers=10)` → `build_graph` →
+  `merge_graphs(self.G, G_new)` → `entity_resolution` → `detect_communities`
+  → `summarize_communities`. Each batch writes
+  `checkpoint_<filename>.pkl`; on restart, `extract_all_triples` resumes
+  from `state['chunk_idx']`.
+
+* **GitHub repo ingest** (`codebase.ingest_github_url_v2`).
+  `git clone --depth 1` → `_build_repo_blueprint` (one structured Markdown
+  doc covering mission, concepts, file roles, per-function summaries,
+  recent commits, PRs) → `code_graph.build_from_repo` (tree-sitter AST
+  → SQLite) → `ws_dg.ingest(blueprint_path)` (feeds it through the same
+  pipeline as a PDF). Incremental hash cache means re-ingesting the same
+  repo only re-processes changed files.
+
+* **Decision provenance schema.** Each decision is a graph node with:
+  `id`, `question`, `answer`, `reasoning_summary`, `communities_used`,
+  `confidence`, `outcome` (`unknown` / `succeeded` / `failed` / `partial`),
+  `outcome_impact`, `access_count`, `timestamp`, plus signed audit
+  metadata when written via AgentNet grants. `decay()` reduces
+  confidence on stale entries; `supersede(old, new)` replaces an
+  outdated decision and links them.
+
+* **Dream cycle** (`consolidate.py`). Re-runs community detection over
+  the merged graph, re-summarizes drifted clusters, computes a wisdom
+  score from `confidence × outcome_impact × access_count`, and promotes
+  high-scorers into `compiled` summaries that `query()` retrieves first.
+
+* **MCP server** (`decisiongraph/mcp_server.py`). Native stdio
+  JSON-RPC server registering 30 tools (see §7). Reuses the same
+  workspace resolution as the FastAPI app via a thin wrapper.
+
+* **REST surface** (`server.py`). FastAPI app on port 8000, ~70
+  endpoints. Per-request workspace binding via a middleware that
+  resolves a cookie (`dg_ws`) or query param (`?ws=`) to a `Workspace`
+  object, then exposes it as `S.dg`/`S.hub`/`S.dm` for the rest of the
+  request. Per-workspace sliding-window rate limiter on the
+  `query`/`ingest`/`simulation` buckets.
+
+* **Code graph internals** (`code_graph.py`). Schema: `files`,
+  `symbols`, `calls`, `imports`, `inherits`, `rationales`, plus a
+  `semantic_stale` flag table. Import-scope resolution does proper
+  Python-import-style lookup so `find_callers("validate_token")` works
+  even when the function is imported under an alias.
+  `causal_radius()` joins call edges with related decisions/PRs from
+  the knowledge graph to give a full impact picture.
+
+* **Federated graph** (`code_graph_federated.py`). Takes a list of
+  `workspace_roots`, opens each one's `code_graph.db` read-only,
+  unions the results. Powers `federated_callers`,
+  `federated_topology`, and `federated_rationale_search`.
+
+* **Durable job queue** (`jobs.py`). SQLite-backed FIFO. A
+  `threading.Thread` named `jobqueue` runs `_loop()`, claims `queued`
+  rows, runs the registered handler (`ingest_github`, `dream`, …),
+  marks `done`/`failed`. `_recover()` on boot re-queues anything
+  stuck in `running` from a previous crash.
+
+* **Stitch UI** (`stitch_ui/`). Plain HTML/CSS/JS (no React) served
+  directly by FastAPI. Knowledge graph viewer uses `vis-network` for
+  force-directed rendering. Decision Memory and Sessions are
+  separate scopes on the same `/api/graph` endpoint.
+
+**Code:** `decisiongraph/` package, `server.py`. Architecture deep-dive
+in `ARCHITECTURE.md`; reference in `DOCUMENTATION.md`.
 
 ---
 
