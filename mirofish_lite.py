@@ -35,7 +35,11 @@ import requests as _rq
 import anthropic
 _CREDS = ROOT / ".dg_credentials.json"
 
-LLM_BACKEND = os.getenv("MFLITE_LLM", "ollama")          # "ollama" | "anthropic"
+# Default: route through the DG credentials' Anthropic-format LLM gateway
+# (e.g. local :8080 proxy → Gemini Flash). Falls back to Ollama if MFLITE_LLM
+# is set to "ollama" explicitly. This keeps MiroFish lightweight on laptops —
+# no large local-model load, fast inference, same gateway used everywhere else.
+LLM_BACKEND = os.getenv("MFLITE_LLM", "anthropic")        # "anthropic" | "ollama"
 OLLAMA_URL  = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct")
 
@@ -316,7 +320,7 @@ async def sim_start(req: Request):
     # N discussion rounds — each round every persona reacts seeing the evolving
     # public conversation (like OASIS's Twitter/Reddit rounds, just compressed).
     # Default 1 for demo speed; bump MFLITE_ROUNDS for richer multi-round debate.
-    ROUNDS = int(os.getenv("MFLITE_ROUNDS", "1"))
+    ROUNDS = int(os.getenv("MFLITE_ROUNDS", "7"))
 
     def _persona_prompt(p, ptype, rnd, feed_ctx):
         return (

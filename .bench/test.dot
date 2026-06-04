@@ -1,0 +1,10 @@
+digraph deploy {
+    rankdir=LR;
+    client -> nginx [label="HTTPS"];
+    nginx -> app1;
+    nginx -> app2;
+    app1 -> redis;
+    app2 -> redis;
+    app1 -> postgres;
+    app2 -> postgres;
+}

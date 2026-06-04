@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# DecisionGraph post-commit hook — auto-captures every commit as an
+# institutional decision in your DG memory.
+#
+# Install (from your repo root):
+#     cp agentnet/hooks/post-commit       .git/hooks/post-commit
+#     chmod +x                            .git/hooks/post-commit
+#
+# Config (set these in your shell env or a .env sourced before the hook):
+#     DG_URL    public or local URL of your DG (e.g. https://....ngrok-free.dev)
+#     DG_TOKEN  an owner bearer token from /agents · Mint owner connection
+#     DG_WS     your workspace id (visible in the connect URL after /owner/)
+#
+# Skip with: git commit --no-verify
+set -eu
+
+DG_URL="${DG_URL:-http://127.0.0.1:8000}"
+DG_TOKEN="${DG_TOKEN:-}"
+DG_WS="${DG_WS:-}"
+
+# Don't block the commit on hook failures — just warn and exit clean.
+if [ -z "$DG_TOKEN" ] || [ -z "$DG_WS" ]; then
+  echo "[dg-hook] DG_TOKEN or DG_WS not set; skipping decision capture" >&2
+  exit 0
+fi
+
+SHA=$(git rev-parse HEAD)
+SUBJECT=$(git log -1 --format=%s)
+BODY=$(git log -1 --format=%b)
+AUTHOR=$(git log -1 --format=%an)
+TS=$(git log -1 --format=%aI)
+FILES=$(git diff-tree --no-commit-id --name-only -r HEAD | head -20 | tr '\n' ' ')
+STATS=$(git diff-tree --shortstat HEAD^ HEAD 2>/dev/null || echo "")
+REPO=$(basename "$(git rev-parse --show-toplevel)")
+
+# Build the JSON-RPC body for store_decision via MCP
+read -r -d '' BODY_JSON <<JSON || true
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "store_decision",
+    "arguments": {
+      "question": "[repo:$REPO] commit $(echo "$SHA" | cut -c1-12) · $(printf '%s' "$SUBJECT" | head -c 200)",
+      "answer": "$(printf '%s\n\n%s\n\nFiles: %s\n%s' "$SUBJECT" "$BODY" "$FILES" "$STATS" | python -c 'import sys,json;print(json.dumps(sys.stdin.read()))' | sed 's/^"//;s/"$//')",
+      "reasoning": "Auto-captured via post-commit hook · author=$AUTHOR · ts=$TS"
+    }
+  }
+}
+JSON
+
+# Fire it off; never block commits
+curl --max-time 10 -s -X POST \
+  "$DG_URL/api/mcp/v1/owner/$DG_WS" \
+  -H "Authorization: Bearer $DG_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "$BODY_JSON" > /dev/null 2>&1 || true
+
+echo "[dg-hook] captured decision for commit $(echo "$SHA" | cut -c1-12)"

@@ -1,0 +1,1 @@
+DecisionGraph stores institutional memory. Decisions link to topics. Topics form communities. Communities summarise organisational knowledge.

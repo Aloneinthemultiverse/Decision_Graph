@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AgentNet · Marketplace</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script>
+tailwind.config={darkMode:"class",theme:{extend:{colors:{
+"surface-container-lowest":"#0e0d15","surface-container-low":"#1c1b23","surface":"#13121b",
+"surface-container":"#201f27","surface-container-high":"#2a2932",
+"on-surface":"#e5e0ed","on-surface-variant":"#c9c4d7","outline-variant":"#474554",
+"primary":"#c7bfff","on-primary":"#2b009e","primary-container":"#8e7fff",
+"secondary":"#4ddada","tertiary":"#51df9c","error":"#ffb4ab"},
+borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem",full:"9999px"},
+spacing:{gutter:"24px",lg:"24px",margin:"32px",xl:"40px",md:"16px",xs:"4px",sm:"8px"},
+fontFamily:{"label-sm":["IBM Plex Sans"],"body-md":["Inter"],"body-lg":["Inter"],
+"headline-md":["Inter"],"display":["Inter"],"mono-data":["JetBrains Mono"]},
+fontSize:{"label-sm":["13px",{lineHeight:"1",letterSpacing:"0.05em",fontWeight:"500"}],
+"micro-caps":["10px",{lineHeight:"1",letterSpacing:"0.1em",fontWeight:"700"}],
+"body-md":["16px",{lineHeight:"1.5"}],"body-lg":["18px",{lineHeight:"1.6"}],
+"headline-md":["24px",{lineHeight:"1.3",fontWeight:"600"}],
+"display":["44px",{lineHeight:"1.1",letterSpacing:"-0.02em",fontWeight:"700"}],
+"mono-data":["13px",{lineHeight:"1.4"}]}}}};
+</script>
+<style>
+.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400;display:inline-block;line-height:1}
+.node-pattern{background-image:radial-gradient(circle at 1px 1px,#474554 1px,transparent 0);background-size:40px 40px}
+.glass-card{background:rgba(42,41,50,.4);backdrop-filter:blur(12px);border:1px solid rgba(71,69,84,.3)}
+body{opacity:0;animation:pageIn .5s ease forwards}@keyframes pageIn{to{opacity:1}}
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+.reveal.in{opacity:1;transform:none}
+.cta-press{transition:transform .15s,filter .2s}.cta-press:hover{transform:translateY(-1px);filter:brightness(1.08)}.cta-press:active{transform:scale(.97)}
+.lift{transition:transform .35s cubic-bezier(.16,1,.3,1),border-color .3s}.lift:hover{transform:translateY(-3px);border-color:rgba(199,191,255,.4)}
+input{font-family:'JetBrains Mono',monospace}
+.tagpill{display:inline-flex;font-size:11px;padding:3px 9px;border-radius:999px;background:rgba(199,191,255,.18);color:#c7bfff;margin:0 4px 4px 0}
+.t-mcp{background:rgba(81,223,156,.18);color:#71fcb6}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head>
+<body class="bg-surface-container-lowest text-on-surface font-body-md antialiased">
+<header class="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-outline-variant/30">
+  <div class="flex justify-between items-center h-16 px-margin max-w-[1440px] mx-auto">
+    <a href="/" class="flex items-center gap-sm">
+      <span class="material-symbols-outlined text-primary">hub</span>
+      <span class="text-headline-md font-headline-md tracking-tight">AgentNet</span>
+      <span class="text-micro-caps uppercase tracking-widest text-on-surface-variant ml-sm">on DecisionGraph</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-xl text-label-sm font-label-sm">
+      <a href="/marketplace" class="text-on-surface">Marketplace</a>
+      <a href="/agents" class="text-on-surface-variant hover:text-on-surface">Agents</a>
+      <a href="/dashboard" class="text-on-surface-variant hover:text-on-surface">Dashboard</a>
+      <a href="/orchestration" class="text-on-surface-variant hover:text-on-surface">Orchestration</a>
+      <a href="/projects" class="text-on-surface-variant hover:text-on-surface">Projects</a>
+      <a href="/docs" class="text-on-surface-variant hover:text-on-surface">Docs</a>
+      <a href="/app" class="text-on-surface-variant hover:text-on-surface">App ↗</a>
+    </nav>
+    <a id="proj-pill" href="/projects" title="switch project" class="text-micro-caps uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors">loading…</a>
+  </div>
+</header>
+<main class="relative">
+  <div class="absolute inset-0 node-pattern opacity-20 pointer-events-none"></div>
+  <section class="relative max-w-[1280px] mx-auto px-margin pt-xl pb-margin">
+    <div class="reveal in">
+      <div class="text-micro-caps uppercase tracking-widest text-tertiary mb-sm">HIRE AN AGENT · SANDBOXED · AUDITED</div>
+      <h1 class="text-display font-display mb-md">Agent Marketplace</h1>
+      <p class="text-body-lg text-on-surface-variant max-w-3xl">
+        Pick an agent. Scope it to topics in your DecisionGraph (deny-by-default).
+        Click <b>Hire</b> — it runs in a network-less Docker sandbox on only the
+        approved slice, writes the learning back into your graph, then revokes its
+        token. Every step is in the immutable audit log.
+      </p>
+    </div>
+  </section>
+  <section class="relative max-w-[1280px] mx-auto px-margin pb-md">
+    <div class="glass-card rounded-xl p-md flex flex-wrap items-center gap-sm">
+      <span class="material-symbols-outlined text-on-surface-variant">search</span>
+      <input id="mkt-search" placeholder="search agents by name, tag, description, or seller…" oninput="renderCards()"
+        class="flex-1 min-w-[280px] bg-transparent border-0 px-sm py-sm focus:outline-none text-on-surface" />
+      <label class="text-label-sm text-on-surface-variant inline-flex items-center gap-xs">
+        <input type="checkbox" id="f-bundled" checked onchange="renderCards()"/> bundled
+      </label>
+      <label class="text-label-sm text-on-surface-variant inline-flex items-center gap-xs">
+        <input type="checkbox" id="f-external" checked onchange="renderCards()"/> third-party
+      </label>
+      <a href="/sellers" class="text-label-sm text-primary hover:underline ml-md">+ list your own agent ↗</a>
+    </div>
+  </section>
+  <section class="relative max-w-[1280px] mx-auto px-margin pb-xl">
+    <div class="glass-card rounded-xl p-lg">
+      <div class="flex items-center justify-between gap-md flex-wrap">
+        <div>
+          <div class="flex items-center gap-sm mb-xs">
+            <span class="material-symbols-outlined text-tertiary">link</span>
+            <h2 class="text-headline-md font-headline-md">Connect your own agent via MCP</h2>
+          </div>
+          <p class="text-body-md text-on-surface-variant max-w-2xl">
+            Plug ANY MCP-capable agent (Claude, Cursor, custom) into your DecisionGraph.
+            Pick scope, click connect, paste the resulting <code class="text-primary">claude mcp add</code> command into your terminal.
+            Every tool call is scope-gated and audited.
+          </p>
+        </div>
+        <div class="flex gap-sm">
+          <button onclick="openConnect('owner')" class="cta-press bg-primary text-on-primary text-label-sm font-label-sm px-xl py-sm rounded-lg shadow-lg shadow-primary/10">Connect as owner</button>
+          <button onclick="openConnect('agent')" class="cta-press border border-outline-variant text-on-surface text-label-sm font-label-sm px-xl py-sm rounded-lg hover:bg-surface-container-high">Connect scoped agent</button>
+        </div>
+      </div>
+
+      <div id="connect-form" class="hidden mt-lg pt-lg border-t border-outline-variant/30">
+        <div class="grid md:grid-cols-3 gap-md">
+          <div>
+            <label class="block text-label-sm font-label-sm text-on-surface-variant mb-xs">NAME</label>
+            <input id="con-name" placeholder="my-claude-assistant"
+                   class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm focus:outline-none focus:border-primary"/>
+          </div>
+          <div id="con-topics-wrap">
+            <label class="block text-label-sm font-label-sm text-on-surface-variant mb-xs">ALLOWED TOPICS <span class="text-on-surface-variant/60">(agent mode only)</span></label>
+            <input id="con-topics" placeholder="attention, transformer"
+                   class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm focus:outline-none focus:border-primary"/>
+          </div>
+          <div>
+            <label class="block text-label-sm font-label-sm text-on-surface-variant mb-xs">TTL (seconds)</label>
+            <input id="con-ttl" value="86400"
+                   class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm focus:outline-none focus:border-primary"/>
+          </div>
+        </div>
+        <div class="flex gap-sm mt-md">
+          <button onclick="doConnect()" class="cta-press bg-tertiary text-on-primary text-label-sm font-label-sm px-xl py-sm rounded-lg">Generate connection</button>
+          <button onclick="document.getElementById('connect-form').classList.add('hidden')" class="text-label-sm text-on-surface-variant hover:text-on-surface">cancel</button>
+        </div>
+        <div id="connect-out" class="mt-md text-sm"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="relative max-w-[1280px] mx-auto px-margin pb-xl">
+    <div id="cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter"></div>
+  </section>
+  <section class="relative max-w-[1280px] mx-auto px-margin pb-xl">
+    <div class="glass-card rounded-xl p-lg">
+      <p class="text-body-md text-on-surface-variant italic">
+        "Off this network an agent is an amnesiac stranger. Its memory and reputation live here, in this company's immutable history."
+      </p>
+    </div>
+  </section>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+function avatarColor(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))>>>0;return`hsl(${h%360} 65% 60%)`}
+function initials(s){return s.split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()}
+let AGENTS = [];
+async function load(){
+  const j=await (await fetch('/api/marketplace/agents')).json();
+  AGENTS = j.agents || [];
+  renderCards();
+}
+function renderCards(){
+  const q = ($('#mkt-search')?.value || '').toLowerCase().trim();
+  const showBundled = $('#f-bundled')?.checked !== false;
+  const showExternal = $('#f-external')?.checked !== false;
+  const grid=$('#cards');grid.innerHTML='';
+  let shown = 0;
+  AGENTS.forEach((a,i)=>{
+    const kind = a.kind || 'bundled';
+    if (kind === 'bundled' && !showBundled) return;
+    if (kind === 'external' && !showExternal) return;
+    if (q) {
+      const hay = (a.name + ' ' + (a.description||'') + ' ' + (a.tags||[]).join(' ') + ' ' + (a.seller_name||'') + ' ' + (a.id||'')).toLowerCase();
+      if (!hay.includes(q)) return;
+    }
+    shown++;
+    const id='c'+i, color=avatarColor(a.id||a.name);
+    const isExt = (kind === 'external');
+    const tagsHtml=(a.tags||[]).map(t=>`<span class="tagpill ${t==='via-mcp'?'t-mcp':''}">${t}</span>`).join('');
+    const ratingHtml = isExt && a.rating
+      ? `<span class="text-label-sm text-warn">★ ${a.rating.toFixed(1)}</span> <span class="text-label-sm text-on-surface-variant">(${a.rating_count||0} reviews · ${a.hire_count||0} hires)</span>`
+      : '';
+    const sellerHtml = a.seller_name
+      ? `<div class="text-label-sm text-on-surface-variant mt-xs"><span class="material-symbols-outlined text-[14px]">storefront</span> by ${a.seller_name}</div>`
+      : '';
+    const ctaHtml = isExt
+      ? `<a href="/marketplace/agent/${a.id}" class="cta-press bg-tertiary text-on-primary text-label-sm font-label-sm px-xl py-sm rounded-lg">View &amp; hire ↗</a>`
+      : `<button onclick="hire('${a.id}','${id}',this)" ${a.available?'':'disabled'}
+                  class="cta-press bg-primary text-on-primary text-label-sm font-label-sm px-xl py-sm rounded-lg shadow-lg shadow-primary/10">Hire</button>
+         <button onclick="document.getElementById('${id}-out').innerHTML=''" class="text-label-sm text-on-surface-variant hover:text-on-surface">clear</button>`;
+    grid.insertAdjacentHTML('beforeend',`
+      <div class="reveal in glass-card rounded-xl p-lg lift">
+        <div class="flex items-center gap-md mb-sm">
+          <div class="w-10 h-10 rounded-full grid place-items-center font-headline-md font-semibold text-on-primary" style="background:${color}">${initials(a.name)}</div>
+          <div class="flex-1 min-w-0">
+            <h3 class="text-headline-md font-headline-md leading-tight truncate">${a.name}</h3>
+            <code class="font-mono-data text-on-surface-variant text-xs">${a.id}</code>
+            ${sellerHtml}
+          </div>
+        </div>
+        <p class="text-body-md text-on-surface-variant mb-sm min-h-[64px]">${a.description}</p>
+        <div class="mb-sm">${tagsHtml}</div>
+        ${ratingHtml ? '<div class="mb-sm">'+ratingHtml+'</div>' : ''}
+        ${isExt ? '' : `<label class="block text-label-sm font-label-sm text-on-surface-variant mb-xs">TOPICS</label>
+         <input id="${id}-t" value="${(a.suggested_topics||[]).join(', ')}"
+                class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm mb-sm focus:outline-none focus:border-primary"/>
+         <label class="block text-label-sm font-label-sm text-on-surface-variant mb-xs">TASK</label>
+         <input id="${id}-task" value="summarize the scoped knowledge"
+                class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm focus:outline-none focus:border-primary"/>`}
+        <div class="flex gap-sm mt-md">${ctaHtml}</div>
+        <div id="${id}-out" class="mt-md text-sm"></div>
+      </div>`);
+  });
+  if (!shown) grid.insertAdjacentHTML('beforeend','<div class="col-span-full text-center text-on-surface-variant py-margin">No agents match your filters.</div>');
+}
+async function hire(agent_id,id,btn){
+  const topics=document.getElementById(id+'-t').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const task=document.getElementById(id+'-task').value;
+  const out=document.getElementById(id+'-out');
+  const old=btn.innerHTML;btn.disabled=true;btn.innerHTML='<span class="spin"></span> running…';
+  out.innerHTML='<span class="text-on-surface-variant">sandboxed run in progress…</span>';
+  try{
+    const r=await fetch('/api/marketplace/hire',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({agent_id,allowed_topics:topics,task})});
+    const j=await r.json();
+    if(!r.ok){out.innerHTML='<div class="text-error">✗ '+(j.detail||r.status)+'</div>';return}
+    const job=j.job;
+    out.innerHTML=`<div class="text-tertiary text-label-sm font-label-sm mb-sm">✓ ${job.job_id} · learning ${job.learning_id} · ${job.duration_s}s · token revoked${job.via==='mcp'?' · via MCP ('+job.mcp_calls+' calls)':''}</div>
+      <blockquote class="border-l-2 border-primary pl-md py-xs my-sm">
+        <div class="text-on-surface whitespace-pre-wrap leading-relaxed">${(job.result.answer||'').replace(/</g,'&lt;')}</div>
+        <div class="text-label-sm text-on-surface-variant mt-md pt-sm border-t border-outline-variant/30">citation: ${job.result.citation||'—'}</div>
+      </blockquote>`;
+  }catch(e){out.innerHTML='<div class="text-error">✗ '+e.message+'</div>'}
+  finally{btn.disabled=false;btn.innerHTML=old}
+}
+let CONNECT_MODE='owner';
+function openConnect(mode){
+  CONNECT_MODE=mode;
+  document.getElementById('connect-form').classList.remove('hidden');
+  document.getElementById('con-topics-wrap').style.display=(mode==='owner'?'none':'block');
+  document.getElementById('connect-out').innerHTML='';
+}
+async function doConnect(){
+  const name=document.getElementById('con-name').value.trim()||(CONNECT_MODE+'-mcp');
+  const ttl=parseInt(document.getElementById('con-ttl').value||'86400');
+  const out=document.getElementById('connect-out');
+  let body={name,ttl_seconds:ttl};
+  let endpoint='/api/agent/connect_owner';
+  if(CONNECT_MODE==='agent'){
+    const topics=document.getElementById('con-topics').value.split(',').map(s=>s.trim()).filter(Boolean);
+    if(!topics.length){out.innerHTML='<span class="text-error">scoped mode needs at least one topic</span>';return}
+    body.allowed_topics=topics;endpoint='/api/agent/connect_agent';
+  }
+  out.innerHTML='<span class="text-on-surface-variant">minting…</span>';
+  try{
+    const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j=await r.json();
+    if(!r.ok){out.innerHTML='<span class="text-error">✗ '+(j.detail||r.status)+'</span>';return}
+    const c=j.connection;
+    out.innerHTML=`
+      <div class="grid md:grid-cols-2 gap-md">
+        <div>
+          <div class="text-label-sm text-on-surface-variant uppercase tracking-widest mb-xs">URL</div>
+          <code class="font-mono-data text-primary break-all">${c.url}</code>
+          <div class="text-label-sm text-on-surface-variant uppercase tracking-widest mt-md mb-xs">AUTH HEADER</div>
+          <code class="font-mono-data text-tertiary break-all">${c.auth_header}</code>
+        </div>
+        <div>
+          <div class="text-label-sm text-on-surface-variant uppercase tracking-widest mb-xs">Mode</div>
+          <span class="tagpill ${CONNECT_MODE==='owner'?'':'t-mcp'}">${CONNECT_MODE==='owner'?'OWNER · full tool surface':'SCOPED AGENT · '+(j.grant.allowed_topics||[]).join(', ')}</span>
+          <div class="text-label-sm text-on-surface-variant uppercase tracking-widest mt-md mb-xs">Expires</div>
+          <code class="font-mono-data text-on-surface-variant">${j.grant.expires_at?new Date(j.grant.expires_at*1000).toLocaleString():'never'}</code>
+        </div>
+      </div>
+      <div class="text-label-sm text-on-surface-variant uppercase tracking-widest mt-lg mb-xs">CLAUDE MCP ADD</div>
+      <pre class="bg-surface-container-low border border-outline-variant/40 rounded-lg p-md text-xs font-mono-data text-on-surface whitespace-pre-wrap">${c.claude_mcp_add}</pre>
+      <div class="text-label-sm text-on-surface-variant uppercase tracking-widest mt-md mb-xs">OR TEST WITH CURL</div>
+      <pre class="bg-surface-container-low border border-outline-variant/40 rounded-lg p-md text-xs font-mono-data text-on-surface whitespace-pre-wrap">${c.curl_example}</pre>
+      <p class="text-body-md text-on-surface-variant mt-md">Paste the <code class="text-primary">claude mcp add</code> command into a terminal, restart Claude Code, and the new Claude session will be able to call the tools listed by <code class="text-primary">tools/list</code> directly on your DG.</p>`;
+  }catch(e){out.innerHTML='<span class="text-error">✗ '+e.message+'</span>'}
+}
+load();
+</script>
+<script>(async()=>{try{const j=await(await fetch('/api/projects')).json();const pill=document.getElementById('proj-pill');if(pill){const a=(j.projects||[]).find(p=>p.id===j.active);pill.textContent=(a?a.name:'no project')+' ↗';}}catch(e){}})();</script>
+</body></html>

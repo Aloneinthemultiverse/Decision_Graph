@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "decisiongraph": {
+      "command": "python",
+      "args": ["-m", "decisiongraph.mcp_server"],
+      "cwd": "C:/Users/Sujit Narrayan M/AppData/Local/Temp/loop_flask",
+      "env": {
+        "PYTHONPATH": "C:/Users/Sujit Narrayan M/Downloads/decisiongraph_v2",
+        "PYTHONIOENCODING": "utf-8",
+        "DG_CODE_GRAPH_DB": "C:/Users/Sujit Narrayan M/AppData/Local/Temp/loop_flask/.dg_code_graph.db"
+      }
+    }
+  }
+}

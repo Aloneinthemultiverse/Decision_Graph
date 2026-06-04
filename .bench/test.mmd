@@ -1,0 +1,8 @@
+graph TD
+    A[User] -->|login| B[AuthService]
+    B -->|validate| C[Database]
+    B -->|issue token| D[JWT Service]
+    C -->|user record| B
+    D -->|signed JWT| A
+    A -->|requests + JWT| E[ResourceAPI]
+    E -->|verify| D

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DecisionGraph · Agents</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script>
+tailwind.config = {darkMode:"class",theme:{extend:{colors:{
+"surface-container-lowest":"#0e0d15","surface-container-low":"#1c1b23","surface":"#13121b",
+"surface-container":"#201f27","surface-container-high":"#2a2932","surface-container-highest":"#35343d",
+"on-surface":"#e5e0ed","on-surface-variant":"#c9c4d7","outline":"#928ea0","outline-variant":"#474554",
+"primary":"#c7bfff","on-primary":"#2b009e","primary-container":"#8e7fff","on-primary-container":"#25008c",
+"secondary":"#4ddada","tertiary":"#51df9c","error":"#ffb4ab","error-container":"#93000a"},
+borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem",full:"9999px"},
+spacing:{gutter:"24px",lg:"24px",margin:"32px",xl:"40px",md:"16px",xs:"4px",sm:"8px"},
+fontFamily:{"label-sm":["IBM Plex Sans"],"body-md":["Inter"],"body-lg":["Inter"],
+"headline-md":["Inter"],"headline-lg":["Inter"],"display":["Inter"],
+"mono-data":["JetBrains Mono"],"micro-caps":["Inter"]},
+fontSize:{"label-sm":["13px",{lineHeight:"1",letterSpacing:"0.05em",fontWeight:"500"}],
+"micro-caps":["10px",{lineHeight:"1",letterSpacing:"0.1em",fontWeight:"700"}],
+"body-md":["16px",{lineHeight:"1.5",fontWeight:"400"}],
+"body-lg":["18px",{lineHeight:"1.6",fontWeight:"400"}],
+"headline-md":["24px",{lineHeight:"1.3",fontWeight:"600"}],
+"headline-lg":["32px",{lineHeight:"1.2",letterSpacing:"-0.01em",fontWeight:"600"}],
+"display":["40px",{lineHeight:"1.1",letterSpacing:"-0.02em",fontWeight:"700"}],
+"mono-data":["13px",{lineHeight:"1.4"}]}}}};
+</script>
+<style>
+.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;display:inline-block;line-height:1}
+.node-pattern{background-image:radial-gradient(circle at 1px 1px,#474554 1px,transparent 0);background-size:40px 40px}
+.glass-card{background:rgba(42,41,50,.4);backdrop-filter:blur(12px);border:1px solid rgba(71,69,84,.3)}
+body{opacity:0;animation:pageIn .5s ease forwards}
+@keyframes pageIn{to{opacity:1}}
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+.reveal.in{opacity:1;transform:none}
+.reveal.s1{transition-delay:.08s}.reveal.s2{transition-delay:.16s}.reveal.s3{transition-delay:.24s}.reveal.s4{transition-delay:.32s}
+.cta-press{transition:transform .15s ease,filter .2s ease}.cta-press:hover{transform:translateY(-1px);filter:brightness(1.08)}.cta-press:active{transform:scale(.97)}
+.lift{transition:transform .35s cubic-bezier(.16,1,.3,1),border-color .3s}.lift:hover{transform:translateY(-3px);border-color:rgba(199,191,255,.4)}
+input,textarea{font-family:'JetBrains Mono',monospace}
+.pill{display:inline-flex;align-items:center;font-size:11px;padding:3px 9px;border-radius:999px;font-weight:600;letter-spacing:.02em}
+.e-access_granted,.e-job_completed,.e-learning_written,.e-mcp_done{background:rgba(81,223,156,.15);color:#71fcb6}
+.e-access_denied,.e-job_failed,.e-mcp_denied{background:rgba(255,180,171,.15);color:#ffb4ab}
+.e-grant_minted,.e-job_started,.e-mcp_call{background:rgba(199,191,255,.18);color:#c7bfff}
+.e-grant_revoked{background:rgba(245,158,11,.15);color:#fbbf24}
+.dot{display:inline-block;width:8px;height:8px;border-radius:999px;margin-right:8px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface font-body-md antialiased">
+
+<header class="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-outline-variant/30">
+  <div class="flex justify-between items-center h-16 px-margin max-w-[1440px] mx-auto">
+    <a href="/" class="flex items-center gap-sm">
+      <span class="material-symbols-outlined text-primary">hub</span>
+      <span class="text-headline-md font-headline-md tracking-tight">DecisionGraph</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-xl text-label-sm font-label-sm">
+      <a href="/marketplace" class="text-on-surface-variant hover:text-on-surface transition-colors">Marketplace</a>
+      <a href="/agents"      class="text-on-surface">Agents</a>
+      <a href="/dashboard"   class="text-on-surface-variant hover:text-on-surface transition-colors">Dashboard</a>
+      <a href="/orchestration" class="text-on-surface-variant hover:text-on-surface transition-colors">Orchestration</a>
+      <a href="/projects" class="text-on-surface-variant hover:text-on-surface">Projects</a>
+      <a href="/onboarding" class="text-on-surface-variant hover:text-on-surface">Onboarding</a>
+      <a href="/docs" class="text-on-surface-variant hover:text-on-surface">Docs</a>
+      <a href="/app"         class="text-on-surface-variant hover:text-on-surface transition-colors">App ↗</a>
+    </nav>
+    <a id="proj-pill" href="/projects" title="switch project" class="text-micro-caps uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors">loading…</a>
+  </div>
+</header>
+
+<main class="relative">
+  <div class="absolute inset-0 node-pattern opacity-20 pointer-events-none"></div>
+
+  <section class="relative max-w-[1280px] mx-auto px-margin pt-xl pb-margin">
+    <div class="reveal s1 in">
+      <div class="text-micro-caps uppercase tracking-widest text-tertiary mb-sm">SCOPED ACCESS · IMMUTABLE AUDIT</div>
+      <h1 class="text-display font-display mb-md">Agents</h1>
+      <p class="text-body-lg text-on-surface-variant max-w-2xl">
+        Every agent reaches the graph through MCP, inside a sandbox.
+        Every call is scope-gated and audited. The agent has no network — only the gateway.
+      </p>
+    </div>
+  </section>
+
+  <section class="relative max-w-[1280px] mx-auto px-margin pb-xl grid lg:grid-cols-2 gap-gutter">
+    <!-- mint -->
+    <div class="reveal s2 in glass-card rounded-xl p-lg lift">
+      <div class="flex items-center gap-sm mb-md">
+        <span class="material-symbols-outlined text-primary">key</span>
+        <h2 class="text-headline-md font-headline-md">Mint a scoped grant</h2>
+      </div>
+      <p class="text-on-surface-variant text-sm mb-lg">Deny-by-default · expiring · revocable.</p>
+      <label class="block text-label-sm text-on-surface-variant mb-xs">Agent name</label>
+      <input id="g-name" placeholder="billing-assistant"
+             class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm focus:outline-none focus:border-primary"/>
+      <label class="block text-label-sm text-on-surface-variant mt-md mb-xs">Allowed topics  <span class="text-on-surface-variant/60">(comma-separated)</span></label>
+      <input id="g-topics" placeholder="pricing, refunds"
+             class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm focus:outline-none focus:border-primary"/>
+      <label class="block text-label-sm text-on-surface-variant mt-md mb-xs">TTL <span class="text-on-surface-variant/60">(seconds)</span></label>
+      <input id="g-ttl" value="3600"
+             class="w-32 bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm focus:outline-none focus:border-primary"/>
+      <button onclick="mint()" class="mt-lg cta-press bg-primary text-on-primary text-label-sm font-label-sm px-xl py-sm rounded-lg shadow-lg shadow-primary/10">
+        Mint grant
+      </button>
+      <div id="g-out" class="mt-md text-sm text-on-surface-variant break-all"></div>
+    </div>
+
+    <!-- run -->
+    <div class="reveal s3 in glass-card rounded-xl p-lg lift">
+      <div class="flex items-center gap-sm mb-md">
+        <span class="material-symbols-outlined text-tertiary">play_circle</span>
+        <h2 class="text-headline-md font-headline-md">Run sample agent</h2>
+      </div>
+      <p class="text-on-surface-variant text-sm mb-lg">Runs the bundled <code class="text-primary">summarizer</code> in a network-less Docker sandbox on only the approved slice.</p>
+      <label class="block text-label-sm text-on-surface-variant mb-xs">Agent token</label>
+      <input id="r-token" placeholder="ag_…"
+             class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm focus:outline-none focus:border-primary"/>
+      <label class="block text-label-sm text-on-surface-variant mt-md mb-xs">Topics</label>
+      <input id="r-topics" placeholder="pricing, refunds"
+             class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm focus:outline-none focus:border-primary"/>
+      <label class="block text-label-sm text-on-surface-variant mt-md mb-xs">Task</label>
+      <input id="r-task" value="summarize the scoped knowledge"
+             class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm focus:outline-none focus:border-primary"/>
+      <button onclick="run()" class="mt-lg cta-press bg-tertiary text-on-primary text-label-sm font-label-sm px-xl py-sm rounded-lg shadow-lg shadow-tertiary/10">
+        Run job
+      </button>
+      <div id="r-out" class="mt-md text-sm break-all"></div>
+    </div>
+  </section>
+
+  <!-- grants -->
+  <section class="relative max-w-[1280px] mx-auto px-margin pb-xl">
+    <div class="reveal s4 in glass-card rounded-xl p-lg">
+      <div class="flex items-center justify-between mb-md">
+        <div class="flex items-center gap-sm">
+          <span class="material-symbols-outlined text-secondary">badge</span>
+          <h2 class="text-headline-md font-headline-md">Active grants</h2>
+        </div>
+        <button onclick="refresh()" class="text-label-sm font-label-sm text-on-surface-variant hover:text-on-surface flex items-center gap-xs cta-press">
+          <span class="material-symbols-outlined text-[18px]">refresh</span> Refresh
+        </button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead><tr class="text-label-sm text-on-surface-variant uppercase tracking-wider border-b border-outline-variant/30">
+            <th class="text-left py-sm">Agent</th><th class="text-left">Token</th><th class="text-left">Topics</th>
+            <th class="text-left">Write</th><th class="text-left">State</th><th></th></tr></thead>
+          <tbody id="grants"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ★ AI Agent Reputation -->
+  <section class="relative max-w-[1280px] mx-auto px-margin pb-xl">
+    <div class="glass-card rounded-xl p-lg">
+      <div class="flex items-center justify-between mb-md">
+        <div class="flex items-center gap-sm">
+          <span class="material-symbols-outlined text-secondary">verified</span>
+          <h2 class="text-headline-md font-headline-md">AI Agent Reputation</h2>
+        </div>
+        <span class="text-label-sm text-on-surface-variant"><span class="dot bg-secondary"></span>computed live from audit log</span>
+      </div>
+      <div class="text-sm text-on-surface-variant mb-md">Trust scores per agent, derived from real audit history — no self-reporting. Higher score = more completed work + learnings written + fewer denials/failures.</div>
+      <div id="rep-empty" class="text-on-surface-variant text-sm py-md hidden">No agents have run any jobs yet. Mint a grant + use it to start building reputation.</div>
+      <div id="rep-list" class="grid gap-md md:grid-cols-2"></div>
+    </div>
+  </section>
+
+  <!-- audit -->
+  <section class="relative max-w-[1280px] mx-auto px-margin pb-xl">
+    <div class="glass-card rounded-xl p-lg">
+      <div class="flex items-center justify-between mb-md">
+        <div class="flex items-center gap-sm">
+          <span class="material-symbols-outlined text-primary">timeline</span>
+          <h2 class="text-headline-md font-headline-md">Immutable audit timeline</h2>
+        </div>
+        <span class="text-label-sm text-on-surface-variant"><span class="dot bg-tertiary"></span>append-only · live</span>
+      </div>
+      <div class="max-h-[480px] overflow-y-auto">
+        <table class="w-full text-sm font-mono-data">
+          <thead><tr class="text-label-sm text-on-surface-variant uppercase tracking-wider sticky top-0 bg-surface-container/80 backdrop-blur">
+            <th class="text-left py-sm">Time</th><th class="text-left">Event</th><th class="text-left">Agent</th><th class="text-left">Detail</th></tr></thead>
+          <tbody id="audit"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $=s=>document.querySelector(s);
+const fmt=t=>new Date(t*1000).toLocaleTimeString();
+async function jget(u){const r=await fetch(u);return r.json()}
+async function jpost(u,b){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});
+  const j=await r.json();if(!r.ok)throw new Error(j.detail||r.status);return j}
+
+async function mint(){
+  const topics=$('#g-topics').value.split(',').map(s=>s.trim()).filter(Boolean);
+  try{
+    const j=await jpost('/api/agent/grants',{agent_name:$('#g-name').value,
+      allowed_topics:topics,ttl_seconds:parseInt($('#g-ttl').value||'3600')});
+    $('#g-out').innerHTML='Token: <code class="text-primary">'+j.grant.token+'</code>';
+    $('#r-token').value=j.grant.token;$('#r-topics').value=topics.join(', ');
+    refresh();
+  }catch(e){$('#g-out').innerHTML='<span class="text-error">Error: '+e.message+'</span>'}
+}
+async function run(){
+  const topics=$('#r-topics').value.split(',').map(s=>s.trim()).filter(Boolean);
+  $('#r-out').innerHTML='<span class="text-on-surface-variant">running sandboxed job…</span>';
+  try{
+    const j=await jpost('/api/agent/run',{agent_token:$('#r-token').value,topics:topics,task:$('#r-task').value});
+    $('#r-out').innerHTML='<span class="text-tertiary">✓ job '+j.job.job_id+'</span> · learning '+j.job.learning_id+' · '+j.job.duration_s+'s · token revoked';
+    refresh();
+  }catch(e){$('#r-out').innerHTML='<span class="text-error">✗ '+e.message+'</span>';refresh()}
+}
+async function revoke(t){try{await jpost('/api/agent/grants/'+t+'/revoke',{});refresh()}catch{}}
+async function loadGrants(){
+  const j=await jget('/api/agent/grants');
+  const b=$('#grants');b.innerHTML='';
+  (j.grants||[]).forEach(g=>{
+    const st=g.revoked?'revoked':(g.expires_at&&Date.now()/1000>g.expires_at?'expired':'active');
+    const pillCls=st==='active'?'e-access_granted':(st==='revoked'?'e-grant_revoked':'');
+    b.insertAdjacentHTML('beforeend',`<tr class="border-b border-outline-variant/15 hover:bg-surface-container-low/40">
+      <td class="py-sm">${g.agent_name}</td>
+      <td class="font-mono-data text-on-surface-variant">${g.token.slice(0,18)}…</td>
+      <td>${(g.allowed_topics||[]).join(', ')||'<span class="text-on-surface-variant/60">none</span>'}</td>
+      <td>${g.can_write?'yes':'<span class="text-on-surface-variant/60">no</span>'}</td>
+      <td><span class="pill ${pillCls}">${st}</span></td>
+      <td>${st==='active'?`<button class="text-label-sm text-error hover:underline" onclick="revoke('${g.token}')">revoke</button>`:''}</td></tr>`);
+  });
+  if(!j.grants||!j.grants.length) b.innerHTML='<tr><td colspan=6 class="py-md text-center text-on-surface-variant">No grants yet. Mint one above.</td></tr>';
+}
+async function loadAudit(){
+  const j=await jget('/api/agent/audit?limit=300');
+  const b=$('#audit');b.innerHTML='';
+  (j.audit||[]).forEach(r=>{
+    let detail=[];
+    for(const k of ['topic','tool','reason','learning_id','mcp_calls','calls','returned','via']) if(r[k]!==undefined) detail.push(`${k}=${r[k]}`);
+    b.insertAdjacentHTML('beforeend',`<tr class="border-b border-outline-variant/15">
+      <td class="py-1 text-on-surface-variant">${fmt(r.ts)}</td>
+      <td><span class="pill e-${r.event}">${r.event}</span></td>
+      <td>${r.agent_name||'<span class="text-on-surface-variant/60">—</span>'}</td>
+      <td class="text-on-surface-variant">${detail.join(' · ')||''}</td></tr>`);
+  });
+  if(!j.audit||!j.audit.length) b.innerHTML='<tr><td colspan=4 class="py-md text-center text-on-surface-variant">No events yet.</td></tr>';
+  const w=document.querySelector('.max-h-\\[480px\\]');w.scrollTop=w.scrollHeight;
+}
+async function loadReputation(){
+  let j;
+  try { j = await jget('/api/agent/reputation'); }
+  catch(e){ return; }
+  const rows = (j && j.reputation) || [];
+  const wrap = document.getElementById('rep-list');
+  const empty = document.getElementById('rep-empty');
+  if (!rows.length){
+    wrap.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  const standingColor = {
+    'trusted':     'text-tertiary  bg-tertiary/15 border-tertiary/30',
+    'established': 'text-secondary bg-secondary/15 border-secondary/30',
+    'unproven':    'text-on-surface-variant bg-surface-container-high border-outline-variant',
+    'flagged':     'text-warn bg-warn/15 border-warn/30',
+    'untrusted':   'text-error bg-error/15 border-error/30',
+  };
+  const html = rows.map(a => {
+    const cls = standingColor[a.standing] || standingColor['unproven'];
+    const total = (a.jobs_completed||0) + (a.jobs_failed||0);
+    const successPct = total ? Math.round(100 * a.jobs_completed / total) : null;
+    const denialPct  = total ? Math.round(100 * (a.access_denied||0) / Math.max(1,total)) : 0;
+    // build a tiny inline bar
+    const bar = `
+      <div class="flex h-1.5 w-full rounded-full overflow-hidden bg-surface-container-lowest mt-xs">
+        <div class="bg-tertiary" style="width:${a.score}%"></div>
+        <div class="bg-outline-variant/40" style="width:${100-a.score}%"></div>
+      </div>`;
+    return `
+      <div class="bg-surface-container-high border border-outline-variant/40 rounded-lg p-md">
+        <div class="flex items-center justify-between mb-xs">
+          <div class="font-semibold text-on-surface truncate">${a.agent_name}</div>
+          <span class="text-[11px] uppercase tracking-wider border rounded px-sm py-[2px] ${cls}">${a.standing}</span>
+        </div>
+        <div class="flex items-baseline gap-xs">
+          <div class="text-2xl font-mono-data text-on-surface">${a.score}</div>
+          <div class="text-xs text-on-surface-variant">/ 100</div>
+        </div>
+        ${bar}
+        <div class="grid grid-cols-2 gap-x-md gap-y-xs mt-md text-xs font-mono-data">
+          <div><span class="text-on-surface-variant">jobs done</span>   <span class="text-tertiary float-right">${a.jobs_completed||0}</span></div>
+          <div><span class="text-on-surface-variant">jobs failed</span> <span class="text-warn float-right">${a.jobs_failed||0}</span></div>
+          <div><span class="text-on-surface-variant">learnings</span>   <span class="text-secondary float-right">${a.learnings_written||0}</span></div>
+          <div><span class="text-on-surface-variant">denials</span>     <span class="text-error float-right">${a.access_denied||0}</span></div>
+          <div class="col-span-2 border-t border-outline-variant/30 pt-xs mt-xs">
+            <span class="text-on-surface-variant">success rate</span>
+            <span class="float-right ${successPct!==null && successPct<70?'text-warn':'text-tertiary'}">${successPct===null?'—':successPct+'%'}</span>
+          </div>
+          <div class="col-span-2 text-on-surface-variant/70 text-[10px]">
+            first seen ${(a.first_seen||'?').slice(0,10)} · last ${(a.last_seen||'?').slice(0,10)}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+  wrap.innerHTML = html;
+}
+function refresh(){loadGrants();loadAudit();loadReputation();}
+refresh();setInterval(loadAudit,5000);setInterval(loadReputation,10000);
+</script>
+<script>(async()=>{try{const j=await(await fetch('/api/projects')).json();const pill=document.getElementById('proj-pill');if(pill){const a=(j.projects||[]).find(p=>p.id===j.active);pill.textContent=(a?a.name:'no project')+' ↗';}}catch(e){}})();</script>
+</body></html>

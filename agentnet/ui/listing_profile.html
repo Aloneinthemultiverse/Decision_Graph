@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Agent profile · AgentNet</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script>
+tailwind.config={darkMode:"class",theme:{extend:{colors:{
+"surface-container-lowest":"#0e0d15","surface-container-low":"#1c1b23","surface":"#13121b",
+"surface-container":"#201f27","surface-container-high":"#2a2932",
+"on-surface":"#e5e0ed","on-surface-variant":"#c9c4d7","outline-variant":"#474554",
+"primary":"#c7bfff","on-primary":"#2b009e","secondary":"#4ddada","tertiary":"#51df9c","error":"#ffb4ab","warn":"#fbbf24"},
+borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem"},
+spacing:{gutter:"24px",lg:"24px",margin:"32px",xl:"40px",md:"16px",xs:"4px",sm:"8px"},
+fontFamily:{"label-sm":["IBM Plex Sans"],"body-md":["Inter"],"headline-md":["Inter"],"display":["Inter"],"mono-data":["JetBrains Mono"]},
+fontSize:{"label-sm":["13px",{lineHeight:"1",letterSpacing:"0.05em",fontWeight:"500"}],
+"micro-caps":["10px",{lineHeight:"1",letterSpacing:"0.1em",fontWeight:"700"}],
+"body-md":["16px",{lineHeight:"1.6"}],"body-lg":["18px",{lineHeight:"1.6"}],
+"headline-md":["24px",{lineHeight:"1.3",fontWeight:"600"}],
+"display":["40px",{lineHeight:"1.1",letterSpacing:"-0.02em",fontWeight:"700"}],
+"mono-data":["13px",{lineHeight:"1.4"}]}}}};
+</script>
+<style>
+.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400;display:inline-block;line-height:1;vertical-align:middle}
+.node-pattern{background-image:radial-gradient(circle at 1px 1px,#474554 1px,transparent 0);background-size:40px 40px}
+.glass-card{background:rgba(42,41,50,.4);backdrop-filter:blur(12px);border:1px solid rgba(71,69,84,.3)}
+body{opacity:0;animation:pageIn .5s ease forwards}@keyframes pageIn{to{opacity:1}}
+.cta-press{transition:transform .15s,filter .2s}.cta-press:hover{transform:translateY(-1px);filter:brightness(1.08)}
+input,textarea{font-family:'JetBrains Mono',monospace}
+.tag{display:inline-flex;font-size:11px;padding:3px 9px;border-radius:999px;background:rgba(199,191,255,.18);color:#c7bfff;margin:0 4px 4px 0}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+.star{color:#fbbf24;font-size:18px}
+.star.dim{color:#474554}
+</style></head>
+<body class="bg-surface-container-lowest text-on-surface font-body-md antialiased">
+<header class="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-outline-variant/30">
+  <div class="flex justify-between items-center h-16 px-margin max-w-[1440px] mx-auto">
+    <a href="/marketplace" class="flex items-center gap-sm">
+      <span class="material-symbols-outlined text-primary">arrow_back</span>
+      <span class="text-headline-md font-headline-md tracking-tight">Marketplace</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-xl text-label-sm font-label-sm">
+      <a href="/sellers" class="text-on-surface-variant hover:text-on-surface">Sell on AgentNet</a>
+      <a href="/docs" class="text-on-surface-variant hover:text-on-surface">Docs</a>
+    </nav>
+  </div>
+</header>
+<main class="relative">
+  <div class="absolute inset-0 node-pattern opacity-15 pointer-events-none"></div>
+  <div id="content" class="max-w-[1100px] mx-auto px-margin py-xl">
+    <div class="text-on-surface-variant">loading…</div>
+  </div>
+</main>
+
+<script>
+const $=s=>document.querySelector(s);
+const lid = location.pathname.split('/').pop();
+const stars = n => {
+  n = Number(n||0);
+  const full = Math.round(n);
+  let s = '';
+  for(let i=1;i<=5;i++) s += '<span class="star'+(i<=full?'':' dim')+'">★</span>';
+  return s;
+};
+async function load(){
+  const r = await fetch('/api/listings/'+encodeURIComponent(lid));
+  if(!r.ok){ $('#content').innerHTML = '<div class="glass-card rounded-xl p-lg">Listing not found.</div>'; return; }
+  const j = await r.json();
+  const l = j.listing, s = j.seller, avg = j.average_rating, revs = j.reviews||[];
+  const tags = (l.tags||[]).map(t=>'<span class="tag">'+t+'</span>').join('');
+  const topics = (l.suggested_topics||[]).join(', ');
+  $('#content').innerHTML = `
+    <div class="grid md:grid-cols-[1fr_320px] gap-gutter items-start">
+      <div>
+        <div class="text-micro-caps uppercase tracking-widest text-tertiary mb-sm">
+          ${(l.tags||[]).includes('third-party')?'THIRD-PARTY LISTING':'BUNDLED AGENT'} · by ${s?s.display_name:'unknown'}
+        </div>
+        <h1 class="text-display font-display mb-md">${l.name}</h1>
+        <p class="text-body-lg text-on-surface-variant max-w-2xl">${l.description||'(no description)'}</p>
+        <div class="mt-md">${tags}</div>
+        <div class="text-on-surface-variant text-sm mt-md">
+          ${stars(avg)} <span class="ml-sm">${avg?avg.toFixed(1):'no'} avg · ${revs.length} reviews · ${l.hire_count||0} hires</span>
+        </div>
+
+        <div class="glass-card rounded-xl p-lg mt-xl">
+          <h3 class="text-headline-md font-headline-md mb-md">Reviews</h3>
+          <div id="reviews">${
+            revs.length? revs.map(r=>`
+              <div class="border-b border-outline-variant/30 py-sm">
+                <div>${stars(r.stars)} <span class="text-label-sm text-on-surface-variant ml-sm">${new Date(r.created_at*1000).toLocaleDateString()}</span></div>
+                <div class="text-on-surface mt-xs">${(r.comment||'').replace(/</g,'&lt;')}</div>
+              </div>`).join('')
+            : '<div class="text-on-surface-variant">No reviews yet.</div>'
+          }</div>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-xl p-lg sticky top-24">
+        <h3 class="text-headline-md font-headline-md mb-md">Hire this agent</h3>
+        <label class="block text-label-sm font-label-sm text-on-surface-variant mb-xs">TOPICS</label>
+        <input id="h-topics" value="${topics}" class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm focus:outline-none focus:border-primary"/>
+        <label class="block text-label-sm font-label-sm text-on-surface-variant mt-md mb-xs">TASK</label>
+        <textarea id="h-task" rows="3" placeholder="What do you want done?" class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm focus:outline-none focus:border-primary"></textarea>
+        <button id="h-btn" onclick="hire(this)" class="mt-md w-full cta-press bg-primary text-on-primary text-label-sm font-label-sm px-xl py-sm rounded-lg shadow-lg shadow-primary/10">Hire (sandboxed + audited)</button>
+        <div id="h-out" class="mt-md text-sm"></div>
+        <div class="mt-md text-label-sm text-on-surface-variant">
+          <div><span class="material-symbols-outlined text-[14px]">verified_user</span> Your data stays scoped + audited</div>
+          <div><span class="material-symbols-outlined text-[14px]">timer</span> Token revokes the moment the agent returns</div>
+        </div>
+      </div>
+    </div>`;
+}
+async function hire(btn){
+  const topics=$('#h-topics').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const task=$('#h-task').value.trim();
+  if(!topics.length){ $('#h-out').textContent='topics required'; return; }
+  if(!task){ $('#h-out').textContent='task required'; return; }
+  const old=btn.innerHTML; btn.disabled=true; btn.innerHTML='<span class="spin"></span> hiring…';
+  $('#h-out').innerHTML='<span class="text-on-surface-variant">Calling seller webhook…</span>';
+  try{
+    const r=await fetch('/api/listings/'+encodeURIComponent(lid)+'/hire',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({topics, task})});
+    const j=await r.json();
+    if(!r.ok){ $('#h-out').innerHTML='<span class="text-error">✗ '+(j.detail||r.status)+'</span>'; return; }
+    $('#h-out').innerHTML=`
+      <div class="text-tertiary text-label-sm">✓ Hire complete · ${j.hire.duration_s}s</div>
+      <blockquote class="border-l-2 border-primary pl-md py-xs my-sm">
+        <div class="text-on-surface whitespace-pre-wrap leading-relaxed">${(j.answer||'').replace(/</g,'&lt;')}</div>
+        <div class="text-label-sm text-on-surface-variant mt-md pt-sm border-t border-outline-variant/30">citation: ${j.citation||'—'}</div>
+      </blockquote>
+      <div class="mt-md text-label-sm">Leave a review:
+        <div class="flex gap-xs my-xs">
+          ${[1,2,3,4,5].map(n=>`<button onclick="review(${n})" class="star dim hover:text-warn" id="rv-${n}">★</button>`).join('')}
+        </div>
+        <textarea id="rv-comment" placeholder="Optional comment" class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm"></textarea>
+        <button onclick="submitReview()" class="mt-sm cta-press bg-tertiary text-on-primary text-label-sm font-label-sm px-md py-sm rounded-lg">Post review</button>
+        <div id="rv-out" class="mt-sm"></div>
+      </div>`;
+  }catch(e){ $('#h-out').innerHTML='<span class="text-error">✗ '+e.message+'</span>'; }
+  finally{ btn.disabled=false; btn.innerHTML=old; }
+}
+let RV_STARS = 5;
+function review(n){
+  RV_STARS = n;
+  for(let i=1;i<=5;i++){
+    const el=document.getElementById('rv-'+i);
+    if(el){ el.classList.toggle('dim', i>n); }
+  }
+}
+async function submitReview(){
+  const comment=document.getElementById('rv-comment').value;
+  const r=await fetch('/api/listings/'+encodeURIComponent(lid)+'/reviews',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({stars: RV_STARS, comment})});
+  const j=await r.json();
+  if(j.review){
+    document.getElementById('rv-out').innerHTML='<span class="text-tertiary">✓ Review posted</span>';
+    setTimeout(load, 1000);
+  } else {
+    document.getElementById('rv-out').innerHTML='<span class="text-error">✗ '+(j.detail||'failed')+'</span>';
+  }
+}
+load();
+</script>
+</body></html>

@@ -1,0 +1,60 @@
+{
+  "agents": [
+    {
+      "id": "summarizer-v1",
+      "name": "Knowledge Summarizer",
+      "description": "Reads the scoped slice of a company's DecisionGraph memory and produces a short summary of what is known, highlighting the highest-confidence item.",
+      "script": "agents/summarizer.py",
+      "suggested_topics": ["pricing", "refunds"],
+      "tags": ["read-only", "deterministic", "stdlib-only"]
+    },
+    {
+      "id": "topic-counter-v1",
+      "name": "Topic Coverage Counter",
+      "description": "Counts how many decisions exist per requested topic and reports the average confidence per topic.",
+      "script": "agents/topic_counter.py",
+      "suggested_topics": ["pricing", "hiring"],
+      "tags": ["read-only", "deterministic", "stdlib-only"]
+    },
+    {
+      "id": "knowledge-qa-v1",
+      "name": "Knowledge QA Analyst",
+      "description": "Skilled retrieval agent. Reads BOTH decisions and PDF/URL-ingested knowledge-graph triples in the approved scope, scores them against the task question (BM25-ish), and returns a cited one-line answer with the top supporting evidence.",
+      "script": "agents/knowledge_qa.py",
+      "suggested_topics": ["pricing"],
+      "tags": ["read-only", "retrieval", "graph-aware", "deterministic"]
+    },
+    {
+      "id": "knowledge-qa-mcp-v1",
+      "name": "Knowledge QA Analyst (MCP)",
+      "description": "Same skill as the retrieval analyst, but reaches the knowledge graph LIVE via MCP tool calls (recall / scoped_search) over JSON-RPC stdio. Every call is scope-gated and audited.",
+      "script": "agents/knowledge_qa_mcp.py",
+      "suggested_topics": ["pricing"],
+      "tags": ["read-only", "retrieval", "graph-aware", "via-mcp"]
+    },
+    {
+      "id": "mesh-provider-v1",
+      "name": "Mesh Tool Provider",
+      "description": "Long-lived MCP agent that exposes utility tools (calculate, word_count, base64_encode) to peers in the same orchestration run. Other agents discover and call them via list_peer_tools / call_peer_tool. Use as a member of an Orchestration -> Dialog or Mesh run.",
+      "script": "agents/mesh_provider.py",
+      "suggested_topics": ["attention"],
+      "tags": ["read-only", "long-lived", "via-mcp", "mesh-provider"]
+    },
+    {
+      "id": "dialog-agent-v1",
+      "name": "Dialog Participant",
+      "description": "Long-lived MCP-speaking agent for multi-agent debates. Forms an opinion, broadcasts it, listens for peers' messages, responds for N rounds, and synthesizes a closing position. Use as a member of an Orchestration→Dialog run.",
+      "script": "agents/dialog_agent.py",
+      "suggested_topics": ["attention"],
+      "tags": ["read-only", "long-lived", "via-mcp", "dialog"]
+    },
+    {
+      "id": "react-analyst-v1",
+      "name": "ReAct Knowledge Analyst",
+      "description": "LLM-powered ReAct agent: THINK -> ACT (query_graph) -> OBSERVE loop. Reasons over the company's DecisionGraph using the configured LLM gateway and produces a multi-paragraph answer with citations to past decisions and graph triples.",
+      "script": "agents/__react__.py",
+      "suggested_topics": ["attention"],
+      "tags": ["read-only", "llm-powered", "graph-aware", "via-react"]
+    }
+  ]
+}

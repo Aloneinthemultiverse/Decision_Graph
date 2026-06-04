@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AgentNet · Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script>
+tailwind.config={darkMode:"class",theme:{extend:{colors:{
+"surface-container-lowest":"#0e0d15","surface-container-low":"#1c1b23","surface":"#13121b",
+"surface-container":"#201f27","surface-container-high":"#2a2932",
+"on-surface":"#e5e0ed","on-surface-variant":"#c9c4d7","outline-variant":"#474554",
+"primary":"#c7bfff","on-primary":"#2b009e","secondary":"#4ddada","tertiary":"#51df9c","error":"#ffb4ab"},
+borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem",full:"9999px"},
+spacing:{gutter:"24px",lg:"24px",margin:"32px",xl:"40px",md:"16px",xs:"4px",sm:"8px"},
+fontFamily:{"label-sm":["IBM Plex Sans"],"body-md":["Inter"],"headline-md":["Inter"],"display":["Inter"],"mono-data":["JetBrains Mono"]},
+fontSize:{"label-sm":["13px",{lineHeight:"1",letterSpacing:"0.05em",fontWeight:"500"}],
+"micro-caps":["10px",{lineHeight:"1",letterSpacing:"0.1em",fontWeight:"700"}],
+"body-md":["16px",{lineHeight:"1.5"}],"body-lg":["18px",{lineHeight:"1.6"}],
+"headline-md":["24px",{lineHeight:"1.3",fontWeight:"600"}],
+"display":["40px",{lineHeight:"1.1",letterSpacing:"-0.02em",fontWeight:"700"}],
+"mono-data":["13px",{lineHeight:"1.4"}]}}}};
+</script>
+<style>
+.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400;display:inline-block;line-height:1}
+.node-pattern{background-image:radial-gradient(circle at 1px 1px,#474554 1px,transparent 0);background-size:40px 40px}
+.glass-card{background:rgba(42,41,50,.4);backdrop-filter:blur(12px);border:1px solid rgba(71,69,84,.3)}
+body{opacity:0;animation:pageIn .5s ease forwards}@keyframes pageIn{to{opacity:1}}
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+.reveal.in{opacity:1;transform:none}
+.cta-press{transition:transform .15s,filter .2s}.cta-press:hover{transform:translateY(-1px);filter:brightness(1.08)}.cta-press:active{transform:scale(.97)}
+input{font-family:'JetBrains Mono',monospace}
+.pill{display:inline-flex;font-size:11px;padding:3px 9px;border-radius:999px;font-weight:600}
+.s-good{background:rgba(81,223,156,.15);color:#71fcb6}
+.s-mid{background:rgba(199,191,255,.18);color:#c7bfff}
+.s-bad{background:rgba(255,180,171,.15);color:#ffb4ab}
+.e-access_granted,.e-job_completed,.e-learning_written,.e-mcp_done{background:rgba(81,223,156,.15);color:#71fcb6}
+.e-access_denied,.e-job_failed,.e-mcp_denied{background:rgba(255,180,171,.15);color:#ffb4ab}
+.e-grant_minted,.e-job_started,.e-mcp_call{background:rgba(199,191,255,.18);color:#c7bfff}
+.e-grant_revoked{background:rgba(245,158,11,.15);color:#fbbf24}
+.bar{height:6px;border-radius:999px;background:rgba(71,69,84,.4);overflow:hidden}
+.bar>span{display:block;height:100%;background:linear-gradient(90deg,#c7bfff,#71fcb6)}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head>
+<body class="bg-surface-container-lowest text-on-surface font-body-md antialiased">
+<header class="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-outline-variant/30">
+  <div class="flex justify-between items-center h-16 px-margin max-w-[1440px] mx-auto">
+    <a href="/" class="flex items-center gap-sm">
+      <span class="material-symbols-outlined text-primary">hub</span>
+      <span class="text-headline-md font-headline-md tracking-tight">AgentNet</span>
+      <span class="text-micro-caps uppercase tracking-widest text-on-surface-variant ml-sm">on DecisionGraph</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-xl text-label-sm font-label-sm">
+      <a href="/marketplace" class="text-on-surface-variant hover:text-on-surface">Marketplace</a>
+      <a href="/agents" class="text-on-surface-variant hover:text-on-surface">Agents</a>
+      <a href="/dashboard" class="text-on-surface">Dashboard</a>
+      <a href="/orchestration" class="text-on-surface-variant hover:text-on-surface">Orchestration</a>
+      <a href="/projects" class="text-on-surface-variant hover:text-on-surface">Projects</a>
+      <a href="/docs" class="text-on-surface-variant hover:text-on-surface">Docs</a>
+      <a href="/app" class="text-on-surface-variant hover:text-on-surface">App ↗</a>
+    </nav>
+    <a id="proj-pill" href="/projects" title="switch project" class="text-micro-caps uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors">loading…</a>
+  </div>
+</header>
+<main class="relative">
+  <div class="absolute inset-0 node-pattern opacity-20 pointer-events-none"></div>
+  <section class="relative max-w-[1280px] mx-auto px-margin pt-xl pb-margin">
+    <div class="reveal in">
+      <div class="text-micro-caps uppercase tracking-widest text-tertiary mb-sm">GOVERNANCE · REPUTATION · NETWORK</div>
+      <h1 class="text-display font-display mb-md">Dashboard</h1>
+      <p class="text-body-lg text-on-surface-variant max-w-3xl">
+        Everything happening in your company workspace plus an anonymized view of the network.
+      </p>
+    </div>
+  </section>
+
+  <section class="relative max-w-[1280px] mx-auto px-margin pb-xl grid grid-cols-2 md:grid-cols-4 gap-gutter">
+    <div class="glass-card rounded-xl p-lg"><div id="k-grants" class="text-display font-display text-primary">–</div><div class="text-label-sm font-label-sm text-on-surface-variant mt-xs">ACTIVE GRANTS</div></div>
+    <div class="glass-card rounded-xl p-lg"><div id="k-jobs" class="text-display font-display text-tertiary">–</div><div class="text-label-sm font-label-sm text-on-surface-variant mt-xs">JOBS COMPLETED</div></div>
+    <div class="glass-card rounded-xl p-lg"><div id="k-denied" class="text-display font-display text-error">–</div><div class="text-label-sm font-label-sm text-on-surface-variant mt-xs">SCOPE DENIALS</div></div>
+    <div class="glass-card rounded-xl p-lg"><div id="k-net" class="text-display font-display text-secondary">–</div><div class="text-label-sm font-label-sm text-on-surface-variant mt-xs">COMPANIES ON NETWORK</div></div>
+  </section>
+
+  <section class="relative max-w-[1280px] mx-auto px-margin pb-xl">
+    <div class="reveal in glass-card rounded-xl p-lg">
+      <div class="flex items-center gap-sm mb-md"><span class="material-symbols-outlined text-secondary">public</span>
+        <h2 class="text-headline-md font-headline-md">Network directory</h2>
+        <span class="text-label-sm font-label-sm text-on-surface-variant ml-sm">anonymized · opaque ids · aggregate counts only</span></div>
+      <div class="overflow-x-auto"><table class="w-full text-sm">
+        <thead><tr class="text-label-sm text-on-surface-variant uppercase tracking-wider border-b border-outline-variant/30">
+          <th class="text-left py-sm">Company</th><th class="text-left">Agents</th><th class="text-left">Jobs</th><th class="text-left">Denials</th><th class="text-left">Standings</th></tr></thead>
+        <tbody id="net"></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="relative max-w-[1280px] mx-auto px-margin pb-xl">
+    <div class="glass-card rounded-xl p-lg">
+      <div class="flex items-center justify-between mb-md">
+        <div class="flex items-center gap-sm"><span class="material-symbols-outlined text-primary">groups</span>
+          <h2 class="text-headline-md font-headline-md">Agents in this company</h2></div>
+        <button onclick="revokeAll()" class="cta-press border border-error/40 text-error text-label-sm font-label-sm px-md py-sm rounded-lg hover:bg-error/10">Revoke ALL active grants</button>
+      </div>
+      <div class="overflow-x-auto"><table class="w-full text-sm">
+        <thead><tr class="text-label-sm text-on-surface-variant uppercase tracking-wider border-b border-outline-variant/30">
+          <th class="text-left py-sm">Agent</th><th class="text-left">Standing</th><th class="text-left">Score</th>
+          <th class="text-left">Done</th><th class="text-left">Failed</th><th class="text-left">Denied</th><th class="text-left">Learnings</th></tr></thead>
+        <tbody id="rep"></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="relative max-w-[1280px] mx-auto px-margin pb-xl">
+    <div class="glass-card rounded-xl p-lg">
+      <div class="flex items-center justify-between mb-md">
+        <div class="flex items-center gap-sm"><span class="material-symbols-outlined text-primary">search</span>
+          <h2 class="text-headline-md font-headline-md">Audit search</h2></div></div>
+      <div class="flex gap-sm mb-md">
+        <input id="q" placeholder="filter by agent, topic, event, reason…" oninput="searchAudit()"
+               class="flex-1 bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm focus:outline-none focus:border-primary"/>
+        <button onclick="searchAudit()" class="cta-press bg-primary text-on-primary text-label-sm font-label-sm px-xl py-sm rounded-lg">Search</button>
+      </div>
+      <div class="max-h-[440px] overflow-y-auto"><table class="w-full text-sm font-mono-data">
+        <thead><tr class="text-label-sm text-on-surface-variant uppercase tracking-wider sticky top-0 bg-surface-container/80 backdrop-blur">
+          <th class="text-left py-sm">Time</th><th class="text-left">Event</th><th class="text-left">Agent</th><th class="text-left">Detail</th></tr></thead>
+        <tbody id="audit"></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="relative max-w-[1280px] mx-auto px-margin pb-margin">
+    <div class="glass-card rounded-xl p-lg">
+      <p class="text-body-md text-on-surface-variant italic">
+        "Every agent reaches the graph through MCP, inside a sandbox. Every call is scope-gated and audited. The agent has no network — only the gateway."
+      </p>
+    </div>
+  </section>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+const fmt=t=>new Date(t*1000).toLocaleTimeString();
+async function jget(u){return (await fetch(u)).json()}
+async function jpost(u){return (await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).json()}
+async function loadKPIs(){
+  const g=await jget('/api/agent/grants');$('#k-grants').textContent=(g.grants||[]).filter(x=>!x.revoked).length;
+  const r=await jget('/api/agent/reputation');
+  $('#k-jobs').textContent=(r.reputation||[]).reduce((s,a)=>s+a.jobs_completed,0);
+  $('#k-denied').textContent=(r.reputation||[]).reduce((s,a)=>s+a.access_denied,0);
+}
+async function loadNet(){
+  const j=await jget('/api/network/companies');$('#k-net').textContent=j.totals.companies;
+  const b=$('#net');b.innerHTML='';
+  if(!j.companies||!j.companies.length){b.innerHTML='<tr><td colspan=5 class="py-md text-center text-on-surface-variant">No activity on the network yet.</td></tr>';return}
+  j.companies.forEach(c=>{
+    const st=Object.entries(c.standings).map(([k,v])=>`<span class="pill ${k==='trusted'||k==='established'?'s-good':(k==='flagged'||k==='untrusted'?'s-bad':'s-mid')}">${k}×${v}</span>`).join(' ');
+    b.insertAdjacentHTML('beforeend',`<tr class="border-b border-outline-variant/15">
+      <td class="py-sm"><code class="font-mono-data text-on-surface-variant">${c.company}</code></td>
+      <td>${c.agents}</td><td>${c.jobs_completed}</td><td>${c.scope_denials}</td><td>${st}</td></tr>`);
+  });
+}
+async function loadRep(){
+  const j=await jget('/api/agent/reputation');const b=$('#rep');b.innerHTML='';
+  if(!j.reputation||!j.reputation.length){b.innerHTML='<tr><td colspan=7 class="py-md text-center text-on-surface-variant">No agents in this company yet.</td></tr>';return}
+  j.reputation.forEach(a=>{
+    const cls=a.score>=60?'s-good':(a.score>=40?'s-mid':'s-bad');
+    b.insertAdjacentHTML('beforeend',`<tr class="border-b border-outline-variant/15">
+      <td class="py-sm">${a.agent_name}</td>
+      <td><span class="pill ${cls}">${a.standing}</span></td>
+      <td><div class="flex items-center gap-sm"><b>${a.score}</b><div class="bar w-24"><span style="width:${a.score}%"></span></div></div></td>
+      <td>${a.jobs_completed}</td><td>${a.jobs_failed}</td><td>${a.access_denied}</td><td>${a.learnings_written}</td></tr>`);
+  });
+}
+async function searchAudit(){
+  const q=encodeURIComponent($('#q').value||'');
+  const j=await jget('/api/agent/audit/search?q='+q+'&limit=500');const b=$('#audit');b.innerHTML='';
+  (j.audit||[]).forEach(r=>{
+    let d=[];for(const k of ['topic','tool','reason','learning_id','mcp_calls','calls','returned','via']) if(r[k]!==undefined) d.push(`${k}=${r[k]}`);
+    b.insertAdjacentHTML('beforeend',`<tr class="border-b border-outline-variant/15">
+      <td class="py-1 text-on-surface-variant">${fmt(r.ts)}</td>
+      <td><span class="pill e-${r.event}">${r.event}</span></td>
+      <td>${r.agent_name||'—'}</td>
+      <td class="text-on-surface-variant">${d.join(' · ')||''}</td></tr>`);
+  });
+  if(!j.audit||!j.audit.length) b.innerHTML='<tr><td colspan=4 class="py-md text-center text-on-surface-variant">No events match.</td></tr>';
+}
+async function revokeAll(){
+  if(!confirm('Revoke ALL active grants for this company?'))return;
+  const j=await jpost('/api/agent/grants/revoke_all');alert('Revoked '+j.revoked+' grant(s).');refresh()
+}
+function refresh(){loadKPIs();loadNet();loadRep();searchAudit()}
+refresh();setInterval(loadKPIs,8000);
+</script>
+<script>(async()=>{try{const j=await(await fetch('/api/projects')).json();const pill=document.getElementById('proj-pill');if(pill){const a=(j.projects||[]).find(p=>p.id===j.active);pill.textContent=(a?a.name:'no project')+' ↗';}}catch(e){}})();</script>
+</body></html>
