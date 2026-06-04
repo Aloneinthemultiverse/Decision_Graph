@@ -76,6 +76,13 @@ Each one is independent. Start only the ones the feature you use needs.
 
 ## 2. The three projects — full breakdown
 
+> 📖 **Full visual guide:** see [`docs/VISUAL_GUIDE.md`](docs/VISUAL_GUIDE.md) —
+> a page-by-page walkthrough in plain English of every screen in the app
+> (Knowledge Base, Query Terminal, Brain, MCP · AgentNet, Simulation Studio,
+> Marketplace, Agents, Dashboard, Orchestration, and the how-to recipes).
+> The same guide is served live at **http://localhost:8000/docs** once you
+> start the DG server.
+
 ### 2.1 DecisionGraph
 
 #### What it is, in one sentence
