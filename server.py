@@ -119,6 +119,19 @@ def _job_ingest(payload: dict) -> dict:
         ingest_fn, stats_fn = ws.dg.ingest, ws.dg.stats
 
     kind = payload["kind"]
+    if kind == "pdf":
+        # Direct file path; bypass the URL/youtube/media text-extract pipeline
+        # and let the real ingest pipeline (read_document -> triples -> graph)
+        # handle it. Same as POST /api/ingest/personal but async.
+        path = payload["path"]
+        if not os.path.isfile(path):
+            return {"ok": False, "error": f"file not found: {path}"}
+        try:
+            with ws.lock:
+                ingest_fn(path)
+        except Exception as e:
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        return {"ok": True, "path": path, "stats": stats_fn()}
     if kind == "url":
         title, text = fetch_url_text(payload["url"])
     elif kind == "youtube":
@@ -143,8 +156,33 @@ def _job_ingest(payload: dict) -> dict:
             except Exception: pass
     return {"ok": True, "title": title, "stats": stats_fn()}
 
+def _job_ingest_github(payload: dict) -> dict:
+    """Async GitHub repo ingest — NEW path. Builds a structured blueprint of
+    the repo (project mission + concepts + file roles + function descriptions
+    + commits + PRs) as ONE markdown document, then feeds it through DG's
+    existing ingest pipeline. DG handles triples, Louvain communities, and
+    compiled summaries — same machinery as PDF ingest. No parallel system."""
+    from decisiongraph.codebase import ingest_github_url_v2, _parse_github_url
+    tok = payload["workspace"]
+    ws = WSM.get(tok)
+    repo_url = payload["repo_url"]
+    if not _parse_github_url(repo_url):
+        return {"ok": False, "error": "must be a public github.com URL"}
+    try:
+        with ws.lock:
+            stats = ingest_github_url_v2(
+                ws.dg, repo_url,
+                branch=(payload.get("branch") or None))
+        if "error" in stats:
+            return {"ok": False, "error": stats["error"], "stats": stats}
+        return {"ok": True, "stats": stats}
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
 JOBS.register("dream", _job_dream)
 JOBS.register("ingest", _job_ingest)
+JOBS.register("ingest_github", _job_ingest_github)
 JOBS.start()
 
 
@@ -207,30 +245,68 @@ if _c and _c.get("api_key"):
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI app
 # ──────────────────────────────────────────────────────────────────────────────
-app = FastAPI(title="DecisionGraph")
+app = FastAPI(title="DecisionGraph",
+              docs_url="/swagger",   # move FastAPI's auto-docs off /docs
+              redoc_url="/redoc")    # our /docs is the human-readable guide
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 WS_COOKIE = "dg_ws"
+DEVICE_COOKIE = "dg_device"
+PROJECT_COOKIE = "dg_project"
 
 # Paths that must NOT mint/require a workspace (static + health)
 _NO_WS_PREFIXES = ("/favicon", "/static")
 
+# Paths whose URL contains an explicit project id (e.g. /p/<pid>/app)
+# are detected at request time below — no static list.
+
 @app.middleware("http")
 async def bind_workspace(request: Request, call_next):
-    """Resolve this visitor's isolated workspace from cookie / header / query,
-    minting a fresh one on first contact. Bind it for the request so every
-    `S.dg/hub/dm` access hits only this visitor's data."""
+    """Resolve this visitor's isolated workspace.
+
+    Resolution order:
+      1. URL-path projects:  /p/<project_id>/...    (cleanest, sharable)
+      2. dg_project cookie + dg_device cookie       (in-browser switcher)
+      3. dg_ws cookie                               (legacy — gets adopted)
+      4. nothing — mint a fresh device + Default Project
+
+    Existing dg_ws cookies are auto-adopted into a "Default Project" record
+    so nobody's data ever disappears under them.
+    """
     path = request.url.path
     if path in ("/favicon.ico",) or any(path.startswith(p) for p in _NO_WS_PREFIXES):
         return await call_next(request)
 
-    token = (request.headers.get("X-Workspace")
-             or request.query_params.get("ws")
-             or request.cookies.get(WS_COOKIE))
-    minted = False
-    if not token or not WorkspaceManager._safe(token):
-        token = WorkspaceManager.new_token()
-        minted = True
+    from decisiongraph import projects as _proj
+
+    # 1. URL-prefix project (/p/<pid>/...)
+    requested_pid = None
+    url_strip = ""
+    if path.startswith("/p/"):
+        rest = path[len("/p/"):]
+        slash = rest.find("/")
+        if slash > 0:
+            requested_pid = rest[:slash]
+            url_strip = "/p/" + requested_pid    # for later URL rewrite if needed
+
+    # 2 + 3 + 4. cookies
+    device_id = request.cookies.get(DEVICE_COOKIE)
+    if not requested_pid:
+        requested_pid = request.cookies.get(PROJECT_COOKIE)
+    legacy_ws = (request.headers.get("X-Workspace")
+                 or request.query_params.get("ws")
+                 or request.cookies.get(WS_COOKIE))
+
+    resolved = _proj.resolve_active_project(
+        device_id=device_id,
+        requested_project_id=requested_pid,
+        ws_cookie=legacy_ws,
+        wsm=WSM)
+
+    device_id = resolved["device_id"]
+    project = resolved["project"]
+    token = project["ws_token"]
+    minted = bool(resolved.get("created"))
 
     try:
         ws = WSM.get(token)
@@ -256,6 +332,19 @@ async def bind_workspace(request: Request, call_next):
         response.set_cookie(
             WS_COOKIE, token, max_age=60 * 60 * 24 * 30,
             httponly=True, samesite="lax",
+        )
+    # persist device + project cookies (project = the namespace; device = the
+    # owner of multiple namespaces). Both long-lived.
+    if request.cookies.get(DEVICE_COOKIE) != device_id:
+        response.set_cookie(
+            DEVICE_COOKIE, device_id, max_age=60 * 60 * 24 * 365,
+            httponly=True, samesite="lax",
+        )
+    if request.cookies.get(PROJECT_COOKIE) != project["id"]:
+        response.set_cookie(
+            PROJECT_COOKIE, project["id"], max_age=60 * 60 * 24 * 365,
+            httponly=False,   # readable by frontend JS so the dropdown can show current project
+            samesite="lax",
         )
     return response
 
@@ -473,6 +562,336 @@ def simulation_store_as_decision(sim_id: str):
     return {"ok": True, "decision_id": did, "scope": sim.company_id or "personal"}
 
 # LLM is server-managed in deployment mode. These endpoints are intentionally
+@app.post("/api/workspace/clear")
+async def clear_workspace(req: Request):
+    """Wipe ALL graph + decision data in the current workspace's personal
+    DG. Leaves the workspace folder structure intact but empties the contents
+    (graph, decisions, communities, summaries, checkpoints, github cache).
+    The user has to confirm in the UI — there's no undo."""
+    require_ready()
+    body = await req.json() if (await req.body()) else {}
+    if (body.get("confirm") or "").strip().lower() != "yes":
+        raise HTTPException(400, "must pass {confirm: 'yes'} to clear")
+    ws = _CURRENT_WS.get()
+    personal_dir = os.path.join(ws.root, "personal")
+    removed: list[str] = []
+    if os.path.isdir(personal_dir):
+        for name in list(os.listdir(personal_dir)):
+            p = os.path.join(personal_dir, name)
+            try:
+                if os.path.isfile(p):
+                    os.unlink(p); removed.append(name)
+                elif os.path.isdir(p):
+                    import shutil as _sh
+                    _sh.rmtree(p, ignore_errors=True); removed.append(name + "/")
+            except Exception:
+                pass
+    # also wipe activities + github cache + skus if they exist (Day-3/Day-1 features)
+    for sub in ("activities", "github_cache", "skus"):
+        d = os.path.join(ws.root, sub)
+        if os.path.isdir(d):
+            import shutil as _sh
+            _sh.rmtree(d, ignore_errors=True); removed.append(sub + "/")
+    # force the workspace to rebuild its in-memory objects on next access
+    try:
+        ws.unload()
+    except Exception:
+        pass
+    return {"cleared": True, "removed": removed,
+            "workspace": ws.token,
+            "note": "workspace is now empty — next page load will rebuild a fresh DG"}
+
+
+# ── forecast (TimesFM / Holt-Winters / linear fallback chain) ─────────────────
+@app.post("/api/forecast")
+async def api_forecast(req: Request):
+    """Time-series forecast for the Simulation Studio UI.
+    Routes through decisiongraph.forecasting which tries TimesFM service first,
+    then Holt-Winters, then linear fallback. Returns backend used."""
+    require_ready()
+    rate_limit("forecast", max_n=30, window_s=60)
+    body = await req.json() if (await req.body()) else {}
+    series = body.get("values") or body.get("series") or []
+    horizon = int(body.get("horizon", 8))
+    if not isinstance(series, list) or len(series) < 4:
+        raise HTTPException(400, "values must be a list of at least 4 numbers")
+    if horizon < 1 or horizon > 128:
+        raise HTTPException(400, "horizon must be 1..128")
+    try:
+        series = [float(x) for x in series]
+    except Exception:
+        raise HTTPException(400, "values must all be numeric")
+    from decisiongraph.forecasting import forecast as _fc, detect_backend
+    try:
+        r = _fc(series, horizon=horizon)
+        r["backend_detected"] = detect_backend()
+        return r
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/forecast/backend_info")
+def api_forecast_backend():
+    from decisiongraph.forecasting import detect_backend
+    return {"backend": detect_backend()}
+
+
+@app.post("/api/forecast/ask")
+async def api_forecast_ask(req: Request):
+    """Natural-language forecast: 'what will revenue be next 4 years?'
+    Pipeline:
+      1) LLM extracts {metric, horizon, unit} from the question
+      2) Server pulls any numeric mentions of `metric` from decisions/sessions
+      3) If <4 numeric pts found, LLM synthesises a plausible history series
+         grounded in whatever graph context exists for the metric
+      4) TimesFM forecasts the resulting series
+      5) LLM writes a one-paragraph narrative answer with the numbers"""
+    require_ready()
+    global_llm_gate()
+    rate_limit("forecast_ask", max_n=10, window_s=60)
+    body = await req.json() if (await req.body()) else {}
+    question = (body.get("question") or "").strip()
+    if not question:
+        raise HTTPException(400, "question required")
+
+    import json as _json, re as _re
+    client = S.dg.client
+    model  = S.creds.get("model") or "gemini-3-flash"
+
+    # ── step 1: extract metric + horizon ──────────────────────────────────
+    extract_prompt = (
+        "Extract structured info from this forecasting question. "
+        "Respond ONLY in compact JSON, no prose.\n"
+        'Schema: {"metric": str, "horizon": int, "unit": str}\n'
+        '- "metric": short name of what to forecast (e.g. "revenue", "users", "ARR")\n'
+        '- "horizon": how many future periods (default 8 if unclear)\n'
+        '- "unit": one of "year","quarter","month","week","day"\n'
+        f"Question: {question}"
+    )
+    try:
+        r = client.messages.create(
+            model=model, max_tokens=2000,
+            messages=[{"role": "user", "content": extract_prompt}],
+        )
+        raw = "".join(getattr(b, "text", "") for b in r.content).strip()
+        m = _re.search(r"\{.*\}", raw, _re.S)
+        meta = _json.loads(m.group(0)) if m else {}
+    except Exception as e:
+        meta = {}
+    metric  = (meta.get("metric") or "value").strip().lower()
+    horizon = max(1, min(64, int(meta.get("horizon") or 8)))
+    unit    = (meta.get("unit") or "period").lower()
+
+    # ── step 2: scan decisions for numeric mentions of the metric ─────────
+    rows = []
+    try:
+        rows = S.dg.memory.all_compiled().get("decisions", [])
+    except Exception:
+        pass
+    # gather any text snippet that mentions the metric, ordered by timestamp
+    rows = sorted(rows, key=lambda r: r.get("timestamp",""))
+    metric_words = [w for w in _re.split(r"\W+", metric) if len(w) > 2]
+    hits = []
+    for row in rows:
+        blob = " ".join(str(row.get(k,"")) for k in
+                        ("question","answer","reasoning_summary","outcome"))
+        if any(w in blob.lower() for w in metric_words) or not metric_words:
+            hits.append({"ts": row.get("timestamp",""), "text": blob[:600]})
+    # extract numbers from hits (currency, %, plain)
+    series_from_graph: list[float] = []
+    NUM_RE = _re.compile(r"(?<![\w])\$?\s?(\d{1,3}(?:[,.]\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s?[%kKmMbB]?")
+    for h in hits:
+        for tok in NUM_RE.findall(h["text"]):
+            try:
+                v = float(tok.replace(",",""))
+                if 0 < v < 1e12:
+                    series_from_graph.append(v)
+            except Exception:
+                pass
+    series_from_graph = series_from_graph[:32]  # cap
+
+    source = "graph"
+    series: list[float] = series_from_graph[:]
+
+    # ── step 3: if not enough graph numbers, ask LLM to synthesise ─────────
+    if len(series) < 4:
+        source = "llm-grounded" if hits else "llm-inferred"
+        ctx = "\n".join(f"- {h['ts'][:10]}: {h['text']}" for h in hits[:6]) or "(no prior context)"
+        synth_prompt = (
+            f"You are estimating a historical time series of {metric!r} "
+            f"per {unit}. Use the prior decision-graph context below if any.\n"
+            f"Return ONLY a JSON array of 12 numeric values (oldest → newest), "
+            f"realistic for the domain, no commentary.\n\n"
+            f"Context:\n{ctx}\n\nJSON array:"
+        )
+        try:
+            r = client.messages.create(
+                model=model, max_tokens=2500,
+                messages=[{"role":"user","content":synth_prompt}],
+            )
+            raw = "".join(getattr(b, "text", "") for b in r.content).strip()
+            m = _re.search(r"\[.*?\]", raw, _re.S)
+            if m:
+                arr = _json.loads(m.group(0))
+                series = [float(x) for x in arr if isinstance(x,(int,float))][:24]
+        except Exception:
+            pass
+
+    if len(series) < 4:
+        raise HTTPException(422, "could not assemble a numeric series for that metric")
+
+    # ── step 4: forecast ─────────────────────────────────────────────────
+    from decisiongraph.forecasting import forecast as _fc, detect_backend
+    fc = _fc(series, horizon=horizon)
+    fc["backend_detected"] = detect_backend()
+
+    # ── step 5: narrative answer ─────────────────────────────────────────
+    last = series[-1]
+    final = fc["point"][-1]
+    pct = ((final - last) / last * 100.0) if last else 0.0
+    nar_prompt = (
+        f"In one short paragraph (<=80 words), answer this question using the "
+        f"forecast numbers. Be concrete, cite first/last forecast values, "
+        f"mention {unit} units, and note this is a TimesFM projection.\n"
+        f"Question: {question}\n"
+        f"Metric: {metric}\n"
+        f"Recent history (last 6): {series[-6:]}\n"
+        f"Forecast next {horizon} {unit}(s): {[round(v,2) for v in fc['point']]}\n"
+        f"Change vs last observed: {pct:+.1f}%"
+    )
+    answer = ""
+    try:
+        r = client.messages.create(
+            model=model, max_tokens=1500,
+            messages=[{"role":"user","content":nar_prompt}],
+        )
+        answer = "".join(getattr(b, "text", "") for b in r.content).strip()
+    except Exception:
+        answer = (f"Projected {metric} over the next {horizon} {unit}(s): "
+                  f"{round(final,2)} ({pct:+.1f}% vs last observed {round(last,2)}).")
+
+    return {
+        "question": question,
+        "metric":   metric,
+        "horizon":  horizon,
+        "unit":     unit,
+        "source":   source,   # 'graph' | 'llm-grounded' | 'llm-inferred'
+        "history":  series,
+        "forecast": fc,
+        "answer":   answer,
+    }
+
+
+@app.get("/api/forecast/series")
+def api_forecast_series():
+    """Expose pre-built numeric series derived from the active workspace's
+    decision graph + simulation history. The Simulation Studio uses these
+    to forecast from real signal rather than hand-typed numbers."""
+    require_ready()
+    out: list[dict] = []
+
+    # 1) Confidence over time — chronological confidence values of all decisions
+    try:
+        rows = S.dg.memory.all_compiled().get("decisions", [])
+        rows = sorted(rows, key=lambda r: r.get("timestamp", ""))
+        conf = [round(float(r.get("confidence", 0.0)), 3) for r in rows
+                if r.get("confidence") is not None]
+        if len(conf) >= 4:
+            out.append({
+                "id": "confidence_over_time",
+                "label": f"Decision confidence over time ({len(conf)} pts)",
+                "values": conf,
+                "unit": "confidence (0-1)",
+            })
+    except Exception:
+        pass
+
+    # 2) Decisions per day — count grouped by ISO date
+    try:
+        from collections import Counter
+        rows = S.dg.memory.all_compiled().get("decisions", [])
+        days = Counter()
+        for r in rows:
+            t = (r.get("timestamp") or "")[:10]
+            if t: days[t] += 1
+        ordered = [days[k] for k in sorted(days.keys())]
+        if len(ordered) >= 4:
+            out.append({
+                "id": "decisions_per_day",
+                "label": f"Decisions logged per day ({len(ordered)} days)",
+                "values": ordered,
+                "unit": "decisions/day",
+            })
+    except Exception:
+        pass
+
+    # 3) Simulation consensus scores — chronological
+    try:
+        sims = S.simulator.list_all()
+        sims = [s for s in sims if s.report and "consensus_score" in (s.report or {})]
+        sims.sort(key=lambda s: s.started_at)
+        scores = [int(s.report["consensus_score"]) for s in sims]
+        if len(scores) >= 4:
+            out.append({
+                "id": "simulation_consensus",
+                "label": f"Simulation consensus scores ({len(scores)} sims)",
+                "values": scores,
+                "unit": "consensus 0-100",
+            })
+    except Exception:
+        pass
+
+    # 4) Session activity — messages per session in chronological order
+    try:
+        sess = S.dm.list_sessions()
+        sess = sorted(sess, key=lambda s: s.get("started_at",""))
+        mcounts = [int(s.get("messages_count", 0)) for s in sess]
+        if len(mcounts) >= 4:
+            out.append({
+                "id": "messages_per_session",
+                "label": f"Messages per session ({len(mcounts)} sessions)",
+                "values": mcounts,
+                "unit": "messages",
+            })
+    except Exception:
+        pass
+
+    # 5) Cumulative graph growth — running total of decisions through time
+    try:
+        rows = S.dg.memory.all_compiled().get("decisions", [])
+        rows = sorted(rows, key=lambda r: r.get("timestamp",""))
+        if len(rows) >= 4:
+            cum = list(range(1, len(rows)+1))
+            out.append({
+                "id": "graph_growth",
+                "label": f"Cumulative decisions ({len(cum)} pts)",
+                "values": cum,
+                "unit": "decisions (cumulative)",
+            })
+    except Exception:
+        pass
+
+    # 6) AUTO-SEED — if the workspace is brand-new, hand back a synthetic
+    # demo series so the UI immediately shows TimesFM working end-to-end
+    # instead of an empty state. Marked `synthetic=True` so the UI can label it.
+    if not out:
+        import math, random, hashlib
+        seed = int(hashlib.md5(getattr(S.ws,'token','demo').encode()).hexdigest()[:8], 16)
+        rnd = random.Random(seed)
+        base = [10 + i*0.6 + 2.5*math.sin(i/2.0) + rnd.uniform(-0.4, 0.4)
+                for i in range(24)]
+        out.append({
+            "id": "demo_seed",
+            "label": "Demo trend (auto-generated — log decisions to replace)",
+            "values": [round(v, 2) for v in base],
+            "unit": "demo units",
+            "synthetic": True,
+        })
+
+    return {"series": out}
+
+
 # inert so a visitor can't hijack or kill the shared connection.
 @app.post("/api/connect")
 async def api_connect(req: Request):
@@ -588,6 +1007,49 @@ async def ingest_media(file: UploadFile = File(...), company_id: str = Form(None
                        workspace=ws.token)
     return {"job_id": jid, "status": "queued", "source": "media"}
 
+# ── github repo ingest (v0 — sync; later: async via job queue) ───────────────
+@app.post("/api/ingest/github")
+async def ingest_github(req: Request):
+    """Drop a github.com URL → DG ingests README/docs/ADRs/manifests/commits
+    AND a per-file LLM summary of source code. Whole repo becomes queryable."""
+    require_ready()
+    global_llm_gate()
+    rate_limit("ingest_github", max_n=5, window_s=3600)
+    body = await req.json() if (await req.body()) else {}
+    repo_url = (body.get("repo_url") or "").strip()
+    branch   = (body.get("branch") or "").strip() or None
+    include_code         = bool(body.get("include_code",         True))
+    use_ast              = bool(body.get("use_ast",              True))
+    include_call_edges   = bool(body.get("include_call_edges",   True))
+    include_hierarchical = bool(body.get("include_hierarchical", True))
+    include_prs          = bool(body.get("include_prs",          True))
+    incremental          = bool(body.get("incremental",          True))
+    if not repo_url:
+        raise HTTPException(400, "repo_url required")
+
+    from decisiongraph.codebase import _parse_github_url
+    if not _parse_github_url(repo_url):
+        raise HTTPException(400, "must be a public github.com URL")
+
+    ws = _CURRENT_WS.get()
+    # Async via job queue — the ingest can take 1–3 min for big repos and
+    # would exceed any reverse-proxy timeout if run synchronously.
+    # The browser polls /api/jobs/<id> for progress + final stats.
+    jid = JOBS.enqueue("ingest_github", {
+        "workspace":            ws.token,
+        "repo_url":             repo_url,
+        "branch":               branch or "",
+        "include_code":         include_code,
+        "use_ast":              use_ast,
+        "include_call_edges":   include_call_edges,
+        "include_hierarchical": include_hierarchical,
+        "include_prs":          include_prs,
+        "incremental":          incremental,
+    }, workspace=ws.token)
+    return {"job_id": jid, "status": "queued", "source": "github",
+            "repo_url": repo_url}
+
+
 # ── companies ─────────────────────────────────────────────────────────────────
 @app.get("/api/companies")
 def list_companies():
@@ -619,6 +1081,413 @@ def company_docs(company_id: str):
     cm = S.hub.get_company(company_id)
     if not cm: raise HTTPException(404)
     return {"documents": cm.list_documents()}
+
+@app.get("/api/repo/list")
+async def list_ingested_repos(req: Request):
+    """List all GitHub repos this workspace has ingested, de-duplicated by
+    canonical owner/repo form. If we see both `owner/X` and bare `X`, they
+    get merged into a single `owner/X` entry."""
+    require_ready()
+    import re as _re
+    ws = _CURRENT_WS.get()
+    rows = ws.dg.memory.all_decisions()
+
+    # collect raw mentions
+    raw_counts: dict[str, int] = {}
+    for r in rows:
+        q = r.get("question") or ""
+        rs = r.get("reasoning_summary") or ""
+        for m in _re.findall(r"repo=([\w\-./]+)", rs):
+            raw_counts[m] = raw_counts.get(m, 0) + 1
+        for m in _re.findall(r"\[repo:([^\]]+)\]", q + " " + rs):
+            raw_counts[m] = raw_counts.get(m, 0) + 1
+        m = _re.search(r"of the (\w[\w\-]*) codebase", q)
+        if m:
+            raw_counts[m.group(1)] = raw_counts.get(m.group(1), 0) + 1
+
+    # canonicalise: prefer owner/repo form. If "owner/X" exists, fold any
+    # bare "X" mentions into it. Otherwise keep bare form.
+    canonical: dict[str, int] = {}
+    has_slash = [k for k in raw_counts if "/" in k]
+    short_to_full = {k.split("/")[-1]: k for k in has_slash}
+    for k, v in raw_counts.items():
+        if "/" in k:
+            canonical[k] = canonical.get(k, 0) + v
+        elif k in short_to_full:
+            full = short_to_full[k]
+            canonical[full] = canonical.get(full, 0) + v
+        else:
+            canonical[k] = canonical.get(k, 0) + v
+
+    repos = [{"name": k, "items": v}
+                for k, v in sorted(canonical.items(), key=lambda x: -x[1])]
+    return {"repos": repos}
+
+
+# ── repo-aware ask: pulls EVERYTHING tagged with a given repo and answers ─────
+@app.post("/api/repo/ask")
+async def repo_ask(req: Request):
+    """When the user asks about an ingested repo specifically, we shouldn't
+    do top-K semantic retrieval (it misses the README, misses the overview,
+    misses most files). Instead pull ALL DG decisions that came from that
+    repo and feed them as one consolidated context to the LLM.
+
+    Body: {question: str, repo: str?}.
+    If repo is omitted, we try to infer it from the question (matches any
+    repo name we've seen in the decision log)."""
+    require_ready()
+    global_llm_gate()
+    rate_limit("repo_ask", max_n=15, window_s=60)
+    body = await req.json() if (await req.body()) else {}
+    question = (body.get("question") or "").strip()
+    repo_hint = (body.get("repo") or "").strip()
+    # graph_focus=True → use semantic seed + call-graph traversal to focus the
+    # context on chunks RELEVANT to the question + their callers/callees,
+    # instead of dumping every chunk. Default off (dump all) since most repos
+    # fit easily. Turn on for very large repos or focused questions.
+    graph_focus = bool(body.get("graph_focus", False))
+    if not question:
+        raise HTTPException(400, "question required")
+
+    ws = _CURRENT_WS.get()
+    rows = ws.dg.memory.all_decisions()
+
+    # ── step 1: find all repo names we've ingested
+    import re as _re
+    repos_seen: dict[str, int] = {}
+    pat = _re.compile(r"\[repo:([^\]]+)\]|reasoning_summary.*?repo=([\w\-./]+)")
+    for r in rows:
+        q = r.get("question") or ""
+        rs = r.get("reasoning_summary") or ""
+        m1 = _re.search(r"\[repo:([^\]]+)\]", q + " " + rs)
+        m2 = _re.search(r"repo=([\w\-./]+)", rs)
+        m3 = _re.search(r"of the (\w[\w\-]*) codebase", q)
+        m4 = _re.search(r"of (\w[\w\-]*) repository", q)
+        for m in (m1, m2, m3, m4):
+            if m:
+                rn = m.group(1).strip()
+                repos_seen[rn] = repos_seen.get(rn, 0) + 1
+    if not repos_seen:
+        raise HTTPException(404, "no ingested repos found in this workspace")
+
+    # ── step 2: pick the target repo
+    chosen = None
+    if repo_hint:
+        # exact or substring match
+        for r in repos_seen:
+            if r.lower() == repo_hint.lower() or repo_hint.lower() in r.lower():
+                chosen = r; break
+    if not chosen:
+        # try to find repo name in the question
+        ql = question.lower()
+        for r in sorted(repos_seen, key=lambda x: -len(x)):
+            if r.lower() in ql:
+                chosen = r; break
+    if not chosen:
+        # default: most-mentioned repo
+        chosen = max(repos_seen, key=lambda r: repos_seen[r])
+
+    # ── step 3: gather EVERYTHING tagged with this repo
+    bucket = {"docs": [], "manifest": [], "commits": [], "prs": [],
+                "folders": [], "files": [], "chunks": [], "overview": [], "other": []}
+    for r in rows:
+        q = (r.get("question") or "")
+        rs = (r.get("reasoning_summary") or "")
+        blob = q + " " + rs
+        # is this row associated with the chosen repo?
+        if (f"[repo:{chosen}]" not in blob and
+            f"of the {chosen} codebase" not in q and
+            f"of {chosen}/" not in rs and
+            f"repo={chosen}" not in rs and
+            f"of the {chosen} repository" not in q and
+            f"repo=" + chosen.split("/")[-1] not in rs):
+            # also try by short repo name (after slash)
+            short = chosen.split("/")[-1]
+            if (f"[repo:{short}]" not in blob and
+                f"of the {short} codebase" not in q and
+                f"repo={short}" not in rs):
+                continue
+        # bucket it
+        ans = r.get("answer") or ""
+        ts = r.get("timestamp") or ""
+        item = {"question": q, "answer": ans, "ts": ts}
+        ql = q.lower()
+        if "what is the" in ql and ("project" in ql or "codebase" in ql or "repository" in ql):
+            bucket["overview"].append(item)
+        elif "kind=doc" in rs or "doc · " in q.lower():
+            bucket["docs"].append(item)
+        elif "kind=manifest" in rs or "manifest" in q.lower():
+            bucket["manifest"].append(item)
+        elif "PR #" in q or "kind=pr" in rs:
+            bucket["prs"].append(item)
+        elif "kind=commit" in rs or "commit · " in q.lower():
+            bucket["commits"].append(item)
+        elif "what is in the" in ql and "folder" in ql:
+            bucket["folders"].append(item)
+        elif "what does the file" in ql:
+            bucket["files"].append(item)
+        elif "what does the" in ql:
+            bucket["chunks"].append(item)
+        else:
+            bucket["other"].append(item)
+
+    counts = {k: len(v) for k, v in bucket.items() if v}
+    if sum(counts.values()) == 0:
+        raise HTTPException(404, f"no decisions found for repo '{chosen}'")
+
+    # ── optional: graph-augmented focused retrieval ────────────────────────
+    # Focus mode NARROWS the function-chunk noise, but ALWAYS keeps the
+    # high-level prose (README, repo overview, manifests, folder rollups,
+    # commits). Those are what answer "what is X" questions.
+    focus_stats: dict | None = None
+    if graph_focus and bucket["chunks"]:
+        try:
+            import numpy as _np
+            embed = ws.dg.embed_model
+            q_vec = embed.encode([question], convert_to_numpy=True)[0]
+            texts = [c["question"] + " " + c["answer"][:300] for c in bucket["chunks"]]
+            t_vecs = embed.encode(texts, convert_to_numpy=True)
+            sims = t_vecs @ q_vec / (_np.linalg.norm(t_vecs, axis=1) *
+                                       _np.linalg.norm(q_vec) + 1e-9)
+            order = _np.argsort(-sims)
+            seed_n = min(20, len(bucket["chunks"]))
+            seeds = [bucket["chunks"][i] for i in order[:seed_n]]
+            seed_names = set()
+            import re as _re_focus
+            for s in seeds:
+                m = _re_focus.search(r"What does the (\S+)", s["question"])
+                if m: seed_names.add(m.group(1))
+
+            neighbour_names = set()
+            if hasattr(ws.dg, "G") and ws.dg.G is not None:
+                G = ws.dg.G
+                for n in seed_names:
+                    if G.has_node(n):
+                        for succ in G.successors(n): neighbour_names.add(succ)
+                        for pred in G.predecessors(n): neighbour_names.add(pred)
+            extras = []
+            seed_keys = {(c["question"], c["answer"]) for c in seeds}
+            for c in bucket["chunks"]:
+                key = (c["question"], c["answer"])
+                if key in seed_keys: continue
+                m = _re_focus.search(r"What does the (\S+)", c["question"])
+                if m and m.group(1) in neighbour_names:
+                    extras.append(c)
+
+            focused = seeds + extras
+            focus_stats = {
+                "seeds":       len(seeds),
+                "from_graph":  len(extras),
+                "dropped":     len(bucket["chunks"]) - len(focused),
+                "kept":        len(focused),
+            }
+            # NARROW only the chunks. README / overview / folders / commits
+            # stay full so "what is X" type questions can answer.
+            bucket["chunks"] = focused
+            counts["chunks"] = len(focused)
+        except Exception as e:
+            focus_stats = {"error": str(e)}
+
+    # ── step 4: build a HIERARCHICAL context block —
+    # repo overview → README/docs → folders (each with its files+functions nested)
+    # → commits → PRs. This mirrors the actual structure of the codebase, so the
+    # LLM "sees" function→file→folder→repo relationships, not a flat dump.
+    # Gemini Flash has 1M-token context window — we use up to ~250K chars
+    # which is well within limits, so no aggressive capping needed.
+
+    import os as _os, re as _re_local
+
+    # Re-parse chunks/files to extract their (folder, file, name) for nesting
+    structured_chunks = []   # [{folder, file, name, summary}]
+    for it in bucket["chunks"]:
+        q = it["question"]
+        # match "What does the NAME kind do in the REPO codebase? (file: PATH, ...)"
+        m = _re_local.search(r"What does the (\S+?) .+? in the .+? codebase\? \(file: ([^,)]+)", q)
+        if m:
+            name, path = m.group(1), m.group(2).strip()
+            folder = _os.path.dirname(path) or "."
+            structured_chunks.append({
+                "folder": folder, "file": path, "name": name,
+                "summary": it["answer"][:500]})
+    for it in bucket["files"]:
+        q = it["question"]
+        m = _re_local.search(r"What does the file (\S+) do", q)
+        if m:
+            path = m.group(1).rstrip("?")
+            folder = _os.path.dirname(path) or "."
+            structured_chunks.append({
+                "folder": folder, "file": path, "name": "(whole file)",
+                "summary": it["answer"][:500]})
+
+    # group by folder
+    by_folder: dict[str, list[dict]] = {}
+    for c in structured_chunks:
+        by_folder.setdefault(c["folder"], []).append(c)
+
+    parts = [
+        f"You are answering a question about the GitHub repository `{chosen}`.",
+        f"The DecisionGraph below contains the COMPLETE structured ingest of that",
+        f"repo: README, manifest, commits, every function/class summary, every",
+        f"folder roll-up, and the repo-level overview. Use this context only.",
+        f"Do not invent details. If the question can't be answered from this",
+        f"context, say so explicitly.",
+        ""]
+
+    # 1. Repo overview (most important — answers "what is X")
+    if bucket["overview"]:
+        parts.append("=== REPO OVERVIEW ===")
+        for it in bucket["overview"]:
+            parts.append(it["answer"][:2000])
+        parts.append("")
+
+    # 2. README + docs (rich prose, important for "what is" questions)
+    if bucket["docs"]:
+        parts.append(f"=== README / DOCS ({len(bucket['docs'])}) ===")
+        for it in bucket["docs"]:
+            parts.append(f"[{it['question'][:120]}]")
+            parts.append(it["answer"][:3000])
+            parts.append("")
+
+    # 3. Manifest (deps + stack — answers "what tech does this use")
+    if bucket["manifest"]:
+        parts.append(f"=== STACK / MANIFEST ({len(bucket['manifest'])}) ===")
+        for it in bucket["manifest"]:
+            parts.append(it["answer"][:1500])
+        parts.append("")
+
+    # 4. HIERARCHICAL STRUCTURE — folder → files → functions
+    # This is where function-to-file-to-folder linking lives.
+    if by_folder or bucket["folders"]:
+        parts.append("=== CODEBASE STRUCTURE (folder → files → functions) ===")
+        # collect folder summaries by path so we can attach them
+        folder_summary_by_path: dict[str, str] = {}
+        for it in bucket["folders"]:
+            m = _re_local.search(r"in the (\S+) folder", it["question"])
+            if m:
+                folder_summary_by_path[m.group(1)] = it["answer"][:600]
+        # render each folder with its rollup + nested files/chunks
+        all_folders = sorted(set(list(by_folder.keys()) + list(folder_summary_by_path.keys())))
+        for folder in all_folders:
+            parts.append(f"")
+            parts.append(f"📁 {folder}/")
+            if folder in folder_summary_by_path:
+                parts.append(f"   — role: {folder_summary_by_path[folder]}")
+            # files in this folder
+            files_in_folder: dict[str, list[dict]] = {}
+            for c in by_folder.get(folder, []):
+                files_in_folder.setdefault(c["file"], []).append(c)
+            for fpath, fns in files_in_folder.items():
+                parts.append(f"   📄 {fpath}")
+                for fn in fns:
+                    if fn["name"] == "(whole file)":
+                        parts.append(f"      → {fn['summary']}")
+                    else:
+                        parts.append(f"      • {fn['name']}: {fn['summary']}")
+        parts.append("")
+
+    # 5. Recent commits
+    if bucket["commits"]:
+        parts.append(f"=== RECENT COMMITS ({len(bucket['commits'])}) ===")
+        for it in bucket["commits"][:25]:
+            parts.append(f"• {it['question'][:200]}")
+            if it["answer"]:
+                parts.append(f"  {it['answer'][:300]}")
+        parts.append("")
+
+    # 6. PRs
+    if bucket["prs"]:
+        parts.append(f"=== RECENT PULL REQUESTS ({len(bucket['prs'])}) ===")
+        for it in bucket["prs"][:20]:
+            parts.append(f"• {it['question'][:200]}")
+            if it["answer"]:
+                parts.append(f"  {it['answer'][:400]}")
+        parts.append("")
+
+    # 7. Call-graph edges — surface function relationships from the knowledge graph
+    # Match the chosen repo against the edge's `repo` attribute in either form:
+    #   • full owner/repo (e.g. "ShaneBraiden/V")
+    #   • bare repo name (e.g. "V")
+    # Also accept partial matches against the src/dst file paths so we still
+    # surface edges if the `repo` attr was set differently.
+    call_edges_section = []
+    if hasattr(ws.dg, "G") and ws.dg.G is not None:
+        try:
+            chosen_short = chosen.split("/")[-1].lower()
+            chosen_full = chosen.lower()
+            for u, v, data in ws.dg.G.edges(data=True):
+                if not isinstance(data, dict): continue
+                if data.get("label") != "calls": continue
+                rep = (data.get("repo", "") or "").lower()
+                src_path = (data.get("src_path", "") or "").lower()
+                dst_path = (data.get("dst_path", "") or "").lower()
+                # match any of: edge.repo attribute, src/dst path, src/dst file in same repo
+                matches = (
+                    chosen_full in rep or chosen_short in rep or
+                    chosen_full in src_path or chosen_short in src_path or
+                    chosen_full in dst_path or chosen_short in dst_path)
+                if not matches:
+                    continue
+                # include the src file path inline so the LLM can ground it
+                line = f"  • {u}  →  {v}"
+                if data.get("src_path"):
+                    line += f"   (in {data['src_path']})"
+                call_edges_section.append(line)
+        except Exception:
+            pass
+    if call_edges_section:
+        parts.append(f"=== FUNCTION CALL GRAPH ({len(call_edges_section)} edges, who calls whom) ===")
+        # cap the edges section to keep total context reasonable — 200 is plenty
+        for e in call_edges_section[:200]:
+            parts.append(e)
+        if len(call_edges_section) > 200:
+            parts.append(f"  …and {len(call_edges_section) - 200} more edges")
+        parts.append("")
+
+    # 8. Anything we couldn't bucket
+    if bucket["other"]:
+        parts.append(f"=== OTHER ({len(bucket['other'])}) ===")
+        for it in bucket["other"][:15]:
+            parts.append(f"• {it['question'][:200]}: {it['answer'][:300]}")
+        parts.append("")
+
+    parts.append("=== USER QUESTION ===")
+    parts.append(question)
+    parts.append("")
+    parts.append("Answer in plain English. Reference specific files, folders, "
+                  "functions, or call relationships from the context above. If "
+                  "you cite a path, use the actual path shown. Be concrete.")
+    big_context = "\n".join(parts)
+
+    # Safety: if context is somehow gigantic (>800k chars), trim chunks first.
+    if len(big_context) > 800_000:
+        big_context = big_context[:800_000] + "\n…[context truncated to fit LLM window]"
+
+    # ── step 5: ask the LLM
+    client = ws.dg.client
+    from decisiongraph import config as _cfg
+    model = _cfg.LLM_MODEL or "gemini-3-flash"
+    try:
+        r = client.messages.create(
+            model=model, max_tokens=3000,
+            messages=[{"role": "user", "content": big_context}],
+        )
+        answer = "".join(getattr(b, "text", "") for b in r.content).strip()
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, f"LLM call failed: {e}")
+
+    return {
+        "repo":              chosen,
+        "question":          question,
+        "answer":            answer,
+        "context_stats":     counts,
+        "total_items_used":  sum(counts.values()),
+        "repos_available":   sorted(repos_seen.keys()),
+        "context_chars":     len(big_context),
+        "call_edges_used":   len(call_edges_section),
+        "graph_focus":       focus_stats,
+    }
+
 
 # ── query ─────────────────────────────────────────────────────────────────────
 @app.post("/api/query")
@@ -1048,8 +1917,15 @@ def _render_kg(G, communities, max_nodes, PAL):
             "title": f"{n}\nCommunity {n2c.get(n,'?')}\nDegree {deg.get(n,0)}",
             "community": n2c.get(n, -1),
         })
-    for u, v in H.edges():
-        edges.append({"from": str(u), "to": str(v)})
+    for u, v, data in H.edges(data=True):
+        e = {"from": str(u), "to": str(v)}
+        # surface useful attrs (call-graph edges carry label='calls' etc.)
+        if isinstance(data, dict):
+            for k in ("label", "relation", "type", "repo",
+                       "src_path", "dst_path"):
+                if data.get(k):
+                    e[k] = data[k]
+        edges.append(e)
     return nodes, edges
 
 
@@ -1192,11 +2068,1005 @@ async def mcp_call(tool_name: str, req: Request):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# SCOPED EXTERNAL-AGENT ACCESS  (Slice-1: grant -> sandbox -> audit)
+# Per-workspace (per-company) isolation: the store lives under S.ws.root, so a
+# grant physically cannot reach another tenant's data.
+# ──────────────────────────────────────────────────────────────────────────────
+import os as _os_agent
+
+_SAMPLE_AGENT = _os_agent.path.join(
+    _os_agent.path.dirname(__file__), "agentnet", "agents", "summarizer.py")
+
+
+def _agent_store():
+    from decisiongraph.agent_access import AgentAccessStore
+    return AgentAccessStore(S.ws.root)
+
+
+@app.post("/api/agent/grants")
+async def agent_mint_grant(req: Request):
+    """Mint a scoped, expiring, revocable grant for an external agent."""
+    require_ready()
+    rate_limit("agent", max_n=30, window_s=60)
+    from decisiongraph.agent_access import AgentAccessError
+    body = await req.json() if (await req.body()) else {}
+    try:
+        g = _agent_store().mint(
+            agent_name=body.get("agent_name", ""),
+            allowed_topics=body.get("allowed_topics", []),
+            ttl_seconds=int(body.get("ttl_seconds", 3600)),
+            can_write=bool(body.get("can_write", False)),
+        )
+        return {"grant": g}
+    except AgentAccessError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/agent/grants")
+def agent_list_grants():
+    require_ready()
+    return {"grants": _agent_store().list_grants()}
+
+
+@app.post("/api/agent/grants/{token}/revoke")
+def agent_revoke_grant(token: str):
+    require_ready()
+    ok = _agent_store().revoke(token)
+    if not ok:
+        raise HTTPException(404, "grant not found")
+    return {"revoked": True, "token": token}
+
+
+@app.get("/api/agent/audit")
+def agent_audit(limit: int = 200):
+    """The audit view: every grant/allow/deny/job event, append-only."""
+    require_ready()
+    return {"audit": _agent_store().read_audit(limit=limit)}
+
+
+@app.get("/api/agent/reputation")
+def agent_reputation():
+    """Phase 2: reputation per agent, computed from the immutable audit log
+    (not stored separately) — the agent's standing lives in this company's
+    history, nowhere else."""
+    require_ready()
+    from decisiongraph.agent_reputation import compute_reputation
+    return {"reputation": compute_reputation(_agent_store())}
+
+
+@app.get("/api/network/companies")
+def network_companies():
+    """Phase 2: anonymized cross-company directory (no names/tokens/content
+    cross a tenant boundary — opaque ids + aggregate counts only)."""
+    require_ready()
+    from decisiongraph.agent_network import network_directory
+    return network_directory(WSM.base)
+
+
+@app.post("/api/agent/grants/revoke_all")
+def agent_revoke_all():
+    """Governance: revoke every active grant for THIS company."""
+    require_ready()
+    st = _agent_store()
+    n = 0
+    for g in st.list_grants():
+        if not g.get("revoked") and st.revoke(g["token"]):
+            n += 1
+    return {"revoked": n}
+
+
+@app.get("/api/agent/audit/search")
+def agent_audit_search(q: str = "", limit: int = 500):
+    """Governance: substring search over THIS company's audit log."""
+    require_ready()
+    ql = (q or "").strip().lower()
+    rows = _agent_store().read_audit(limit=limit)
+    if ql:
+        rows = [r for r in rows
+                if ql in json.dumps(r, default=str).lower()]
+    return {"audit": rows, "query": q}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# HTTP MCP endpoints — external agents (Claude/Cursor/anything) connect here
+# ──────────────────────────────────────────────────────────────────────────────
+def _bearer(req: Request):
+    h = req.headers.get("authorization", "")
+    if not h.lower().startswith("bearer "):
+        return None
+    return h[7:].strip() or None
+
+
+async def _mcp_http_dispatch(req: Request, ws_token: str, owner_mode: bool):
+    token = _bearer(req)
+    if not token:
+        raise HTTPException(401, "missing Authorization: Bearer header")
+    if not WSM._safe(ws_token):
+        raise HTTPException(400, "invalid workspace id")
+    ws = WSM.get(ws_token)
+    if ws is None:
+        raise HTTPException(404, "workspace not found")
+
+    from decisiongraph.agent_access import AgentAccessStore
+    store = AgentAccessStore(ws.root)
+    grant = store.get(token)
+    if not grant:
+        raise HTTPException(403, "unknown or invalid token")
+    if owner_mode and not grant.get("is_owner"):
+        raise HTTPException(403, "owner endpoint requires an owner token")
+    if (not owner_mode) and grant.get("is_owner"):
+        raise HTTPException(400, "owner token sent to agent endpoint")
+
+    try:
+        body = await req.json()
+    except Exception:
+        raise HTTPException(400, "invalid JSON body")
+    if not isinstance(body, dict) or body.get("jsonrpc") != "2.0":
+        raise HTTPException(400, "expected JSON-RPC 2.0 request")
+
+    from decisiongraph.agent_job import WorkspaceMemoryAdapter
+    from decisiongraph.mcp_gateway import MCPGateway
+    # bind the workspace so per-request dg/hub/dm work for tool dispatch
+    tok_ctx = _CURRENT_WS.set(ws)
+    try:
+        gw = MCPGateway(
+            store=store,
+            adapter=WorkspaceMemoryAdapter(ws.dg),
+            agent_token=token,
+            job_id=f"ext_{int(time.time()*1000)}",
+            dg=ws.dg,
+            owner=bool(grant.get("is_owner")),
+            ws=ws,
+            ctx={"JOBS": JOBS, "S_simulator": S.simulator,
+                 "settings": S.settings})
+        return gw.handle(body)
+    finally:
+        _CURRENT_WS.reset(tok_ctx)
+
+
+@app.post("/api/mcp/v1/owner/{ws_token}")
+async def mcp_http_owner(ws_token: str, req: Request):
+    """Owner MCP endpoint — full DG tool surface."""
+    return await _mcp_http_dispatch(req, ws_token, owner_mode=True)
+
+
+@app.post("/api/mcp/v1/agent/{ws_token}")
+async def mcp_http_agent(ws_token: str, req: Request):
+    """Hired-agent MCP endpoint — scope-gated, read-mostly."""
+    return await _mcp_http_dispatch(req, ws_token, owner_mode=False)
+
+
+@app.post("/api/agent/connect_owner")
+async def agent_connect_owner(req: Request):
+    """Mint an OWNER MCP token for THIS workspace + return the connection
+    bundle: URL, header, claude mcp add command."""
+    require_ready()
+    body = await req.json() if (await req.body()) else {}
+    name = (body.get("name") or "owner-mcp").strip()
+    ttl = int(body.get("ttl_seconds", 86400))
+    g = _agent_store().mint(agent_name=name, allowed_topics=[],
+                             ttl_seconds=ttl, can_write=True, is_owner=True)
+    ws = S.ws
+    base = str(req.base_url).rstrip("/")
+    url = f"{base}/api/mcp/v1/owner/{ws.token}"
+    return {
+        "grant": g,
+        "connection": {
+            "url": url,
+            "auth_header": f"Bearer {g['token']}",
+            "claude_mcp_add": (
+                f'claude mcp add decisiongraph-owner '
+                f'--transport http '
+                f'--header "Authorization: Bearer {g["token"]}" '
+                f'{url}'),
+            "curl_example": (
+                f'curl -X POST -H "Authorization: Bearer {g["token"]}" '
+                f'-H "Content-Type: application/json" '
+                f'-d \'{{"jsonrpc":"2.0","id":1,"method":"tools/list"}}\' '
+                f'{url}'),
+        },
+    }
+
+
+@app.post("/api/agent/connect_agent")
+async def agent_connect_agent(req: Request):
+    """Mint a SCOPED AGENT MCP token + connection bundle."""
+    require_ready()
+    body = await req.json() if (await req.body()) else {}
+    name = (body.get("name") or "external-agent").strip()
+    topics = body.get("allowed_topics") or []
+    ttl = int(body.get("ttl_seconds", 3600))
+    if not topics:
+        raise HTTPException(400, "allowed_topics required (scope must be non-empty)")
+    g = _agent_store().mint(agent_name=name, allowed_topics=topics,
+                             ttl_seconds=ttl, can_write=False, is_owner=False)
+    ws = S.ws
+    base = str(req.base_url).rstrip("/")
+    url = f"{base}/api/mcp/v1/agent/{ws.token}"
+    return {
+        "grant": g,
+        "connection": {
+            "url": url,
+            "auth_header": f"Bearer {g['token']}",
+            "claude_mcp_add": (
+                f'claude mcp add decisiongraph-agent '
+                f'--transport http '
+                f'--header "Authorization: Bearer {g["token"]}" '
+                f'{url}'),
+            "curl_example": (
+                f'curl -X POST -H "Authorization: Bearer {g["token"]}" '
+                f'-H "Content-Type: application/json" '
+                f'-d \'{{"jsonrpc":"2.0","id":1,"method":"tools/list"}}\' '
+                f'{url}'),
+        },
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PROJECTS · multiple named workspaces per device
+# ──────────────────────────────────────────────────────────────────────────────
+def _device_id(req: Request) -> Optional[str]:
+    return req.cookies.get(DEVICE_COOKIE)
+
+
+@app.get("/api/projects")
+def projects_list(req: Request):
+    """List this device's projects + which one is currently active."""
+    from decisiongraph import projects as _proj
+    dev = _device_id(req)
+    items = _proj.list_projects(dev) if dev else []
+    active = req.cookies.get(PROJECT_COOKIE)
+    return {"device_id": dev, "active": active, "projects": items}
+
+
+@app.post("/api/projects")
+async def projects_create(req: Request):
+    """Create a new project. Returns the project record; UI should then
+    redirect / POST /api/projects/{id}/switch to make it active."""
+    from decisiongraph import projects as _proj
+    dev = _device_id(req)
+    if not dev:
+        # middleware should have set this — sanity guard
+        raise HTTPException(400, "no device cookie; refresh the page once first")
+    body = await req.json() if (await req.body()) else {}
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "name required")
+    p = _proj.create_project(dev, name, WSM)
+    return {"project": p}
+
+
+@app.post("/api/projects/{project_id}/switch")
+def projects_switch(project_id: str, req: Request):
+    """Set the active project for this device. Returns the project."""
+    from decisiongraph import projects as _proj
+    dev = _device_id(req)
+    p = _proj.get_project(dev, project_id) if dev else None
+    if not p:
+        raise HTTPException(404, "project not found")
+    resp = JSONResponse({"project": p, "switched": True})
+    resp.set_cookie(PROJECT_COOKIE, p["id"], max_age=60 * 60 * 24 * 365,
+                    httponly=False, samesite="lax")
+    return resp
+
+
+@app.post("/api/projects/{project_id}/rename")
+async def projects_rename(project_id: str, req: Request):
+    from decisiongraph import projects as _proj
+    dev = _device_id(req)
+    body = await req.json() if (await req.body()) else {}
+    name = body.get("name") or ""
+    p = _proj.rename_project(dev, project_id, name)
+    if not p:
+        raise HTTPException(404, "project not found or invalid name")
+    return {"project": p}
+
+
+@app.post("/api/projects/{project_id}/delete")
+def projects_delete(project_id: str, req: Request):
+    """Soft-delete. Underlying workspace storage is preserved on disk."""
+    from decisiongraph import projects as _proj
+    dev = _device_id(req)
+    ok = _proj.delete_project(dev, project_id) if dev else False
+    if not ok:
+        raise HTTPException(404, "project not found")
+    return {"deleted": True}
+
+
+@app.get("/projects", response_class=HTMLResponse)
+def projects_page():
+    p = _os_agent.path.join(_os_agent.path.dirname(__file__),
+                            "agentnet", "ui", "projects.html")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except FileNotFoundError:
+        raise HTTPException(404, "projects page not found")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PHASE 4 — Marketplace pivot: sellers · listings · reviews · coordinator
+# ──────────────────────────────────────────────────────────────────────────────
+
+# A · Seller signup ─────────────────────────────────────────────────────────
+@app.post("/api/sellers")
+async def sellers_signup(req: Request):
+    from decisiongraph import sellers as _s
+    body = await req.json() if (await req.body()) else {}
+    try:
+        rec = _s.signup(
+            display_name=body.get("display_name") or "",
+            email=body.get("email"), bio=body.get("bio"))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"seller": rec, "note": "Store the seller_key — it's needed to manage your listings."}
+
+
+@app.get("/api/sellers")
+def sellers_list():
+    from decisiongraph import sellers as _s
+    return {"sellers": _s.list_all()}
+
+
+@app.get("/api/sellers/{sid}")
+def sellers_get(sid: str):
+    from decisiongraph import sellers as _s
+    rec = _s.get(sid)
+    if not rec:
+        raise HTTPException(404, "seller not found")
+    return rec
+
+
+def _seller_from_key(req: Request):
+    """Auth helper: returns the seller record if header X-Seller-Key matches."""
+    from decisiongraph import sellers as _s
+    key = req.headers.get("x-seller-key") or req.headers.get("X-Seller-Key")
+    if not key:
+        raise HTTPException(401, "X-Seller-Key header required")
+    rec = _s.authenticate(key)
+    if not rec:
+        raise HTTPException(403, "invalid seller key")
+    return rec
+
+
+@app.post("/api/sellers/me/update")
+async def sellers_update_me(req: Request):
+    from decisiongraph import sellers as _s
+    seller = _seller_from_key(req)
+    body = await req.json() if (await req.body()) else {}
+    out = _s.update(seller["id"],
+                     bio=body.get("bio"), email=body.get("email"),
+                     display_name=body.get("display_name"))
+    return {"seller": out}
+
+
+# B · Listings ──────────────────────────────────────────────────────────────
+@app.post("/api/listings")
+async def listings_submit(req: Request):
+    from decisiongraph import listings as _l
+    seller = _seller_from_key(req)
+    body = await req.json() if (await req.body()) else {}
+    try:
+        rec = _l.submit(
+            seller_id=seller["id"],
+            name=body.get("name") or "",
+            description=body.get("description") or "",
+            tags=body.get("tags") or [],
+            suggested_topics=body.get("suggested_topics") or [],
+            webhook_url=body.get("webhook_url") or "",
+            expected_scope_hint=body.get("expected_scope_hint") or "")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"listing": rec}
+
+
+@app.get("/api/listings")
+def listings_public(seller_id: Optional[str] = None):
+    from decisiongraph import listings as _l, sellers as _s
+    if seller_id:
+        items = _l.list_by_seller(seller_id)
+    else:
+        items = _l.list_public()
+    # join seller display_name for UI
+    for it in items:
+        sel = _s.get(it.get("seller_id") or "")
+        it["seller_name"] = (sel or {}).get("display_name") or "unknown"
+    return {"listings": items}
+
+
+@app.get("/api/listings/{lid}")
+def listings_get(lid: str):
+    from decisiongraph import listings as _l, sellers as _s, reviews as _r
+    rec = _l.get(lid)
+    if not rec:
+        raise HTTPException(404, "listing not found")
+    seller = _s.get(rec.get("seller_id") or "")
+    return {
+        "listing": rec,
+        "seller": seller,
+        "average_rating": _l.average_rating(rec),
+        "reviews": _r.for_listing(lid),
+    }
+
+
+@app.post("/api/listings/{lid}/update")
+async def listings_update(lid: str, req: Request):
+    from decisiongraph import listings as _l
+    seller = _seller_from_key(req)
+    rec = _l.get(lid)
+    if not rec:
+        raise HTTPException(404, "not found")
+    if rec.get("seller_id") != seller["id"]:
+        raise HTTPException(403, "not your listing")
+    body = await req.json() if (await req.body()) else {}
+    try:
+        out = _l.update(lid, **{
+            k: body[k] for k in
+            ("description", "tags", "suggested_topics", "webhook_url",
+             "expected_scope_hint")
+            if k in body})
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"listing": out}
+
+
+@app.post("/api/listings/{lid}/delete")
+def listings_delete(lid: str, req: Request):
+    from decisiongraph import listings as _l
+    seller = _seller_from_key(req)
+    rec = _l.get(lid)
+    if not rec:
+        raise HTTPException(404, "not found")
+    if rec.get("seller_id") != seller["id"]:
+        raise HTTPException(403, "not your listing")
+    _l.delete(lid)
+    return {"deleted": True}
+
+
+# D · External hire flow ────────────────────────────────────────────────────
+@app.post("/api/listings/{lid}/hire")
+async def listings_hire(lid: str, req: Request):
+    """Hire a third-party listing.
+
+    Mints a scoped grant for the buyer's current workspace and POSTs a hire
+    request to the seller's webhook. The seller's agent is expected to
+    connect to the buyer's MCP endpoint with that grant, do its work,
+    and reply (synchronous) with a final answer + citation. We persist the
+    answer as a [external-agent:<listing_name>] decision in the buyer's DG.
+    """
+    require_ready()
+    rate_limit("agent", max_n=10, window_s=60)
+    from decisiongraph import listings as _l
+    body = await req.json() if (await req.body()) else {}
+    listing = _l.get(lid)
+    if not listing or not listing.get("approved"):
+        raise HTTPException(404, "listing not found or not approved")
+    topics = body.get("topics") or listing.get("suggested_topics") or []
+    if not topics:
+        raise HTTPException(400, "topics required")
+    task = (body.get("task") or "do the work").strip()
+    ttl = int(body.get("ttl_seconds") or 900)
+
+    store = _agent_store()
+    grant = store.mint(agent_name=listing["name"], allowed_topics=topics,
+                        ttl_seconds=ttl, can_write=False)
+    base = str(req.base_url).rstrip("/")
+    buyer_mcp = f"{base}/api/mcp/v1/agent/{S.ws.token}"
+
+    import time as _t, urllib.request as _ur, urllib.error as _ue, json as _j
+    started = _t.time()
+    hire_payload = {
+        "version": "1",
+        "hire_id": grant["token"][:12],
+        "listing_id": lid,
+        "listing_name": listing["name"],
+        "task": task,
+        "allowed_topics": topics,
+        "buyer_mcp": {
+            "url": buyer_mcp,
+            "bearer": grant["token"],
+            "expires_at": grant["expires_at"],
+        },
+        "callback_hint": f"{base}/api/listings/{lid}/hire/result",
+    }
+    req_body = _j.dumps(hire_payload).encode("utf-8")
+    hreq = _ur.Request(
+        listing["webhook_url"], data=req_body,
+        headers={"Content-Type": "application/json",
+                 "User-Agent": "DecisionGraph-Hire/1"})
+    try:
+        with _ur.urlopen(hreq, timeout=int(body.get("webhook_timeout") or 180)) as r:
+            resp_text = r.read().decode("utf-8", "replace")
+            resp_status = r.status
+    except _ue.HTTPError as e:
+        try: store.revoke(grant["token"])
+        except Exception: pass
+        raise HTTPException(502, f"seller webhook returned {e.code}: "
+                                   f"{e.read().decode('utf-8','replace')[:200]}")
+    except Exception as e:
+        try: store.revoke(grant["token"])
+        except Exception: pass
+        raise HTTPException(502, f"seller webhook unreachable: "
+                                   f"{type(e).__name__}: {e}")
+    try:
+        parsed = _j.loads(resp_text or "{}")
+    except Exception:
+        parsed = {"answer": resp_text[:2000], "citation": "raw seller response"}
+
+    duration = round(_t.time() - started, 3)
+    final_answer = (parsed.get("answer") or "").strip() or "(seller returned empty)"
+    citation = parsed.get("citation") or f"external listing {lid}"
+
+    # persist the answer as a decision in buyer's DG
+    try:
+        S.dg.memory.store(
+            question=f"[external-agent:{listing['name']}] {task}"[:500],
+            answer=final_answer[:4000],
+            reasoning_summary=(
+                f"External hire: listing={lid}, seller={listing.get('seller_id')}, "
+                f"duration={duration}s, scope={topics}"),
+            communities_used=[], context_triples=[])
+        S.dg.memory.save()
+    except Exception:
+        pass
+
+    # revoke the grant after the call (single-use hire)
+    try: store.revoke(grant["token"])
+    except Exception: pass
+
+    _l.bump_hire(lid)
+
+    return {
+        "hire": {
+            "listing_id": lid, "listing_name": listing["name"],
+            "via": "external", "duration_s": duration,
+            "seller_status": resp_status,
+            "buyer_mcp": buyer_mcp,
+        },
+        "answer": final_answer,
+        "citation": citation,
+        "raw": parsed,
+    }
+
+
+# E · Reviews ───────────────────────────────────────────────────────────────
+@app.post("/api/listings/{lid}/reviews")
+async def review_submit(lid: str, req: Request):
+    from decisiongraph import reviews as _r
+    body = await req.json() if (await req.body()) else {}
+    try:
+        rec = _r.submit(lid,
+                         buyer_workspace=S.ws.token,
+                         stars=float(body.get("stars") or 5),
+                         comment=body.get("comment") or "",
+                         hire_job_id=body.get("hire_job_id"))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"review": rec}
+
+
+@app.get("/api/listings/{lid}/reviews")
+def review_list(lid: str):
+    from decisiongraph import reviews as _r
+    return {"reviews": _r.for_listing(lid)}
+
+
+# G · Coordinator orchestration ─────────────────────────────────────────────
+@app.post("/api/orchestration/coordinator")
+async def orchestration_coordinator(req: Request):
+    """Autonomous coordinator: one LLM manager plans + hires sub-agents from
+    the catalog dynamically to satisfy a goal."""
+    require_ready()
+    rate_limit("agent", max_n=3, window_s=120)
+    from decisiongraph.orchestration import run_coordinator
+    from decisiongraph.agent_job import WorkspaceMemoryAdapter
+    body = await req.json() if (await req.body()) else {}
+    goal = (body.get("goal") or "").strip()
+    if not goal:
+        raise HTTPException(400, "goal required")
+    try:
+        return {"run": run_coordinator(
+            store=_agent_store(),
+            adapter=WorkspaceMemoryAdapter(S.dg),
+            ws_dg=S.dg, goal=goal,
+            allowed_agent_ids=body.get("allowed_agent_ids"),
+            max_hires=int(body.get("max_hires") or 5),
+            max_seconds=int(body.get("max_seconds") or 300),
+            allowed_topics=body.get("allowed_topics"))}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, str(e))
+
+
+# Pages
+@app.get("/sellers", response_class=HTMLResponse)
+def sellers_page():
+    p = _os_agent.path.join(_os_agent.path.dirname(__file__),
+                            "agentnet", "ui", "sellers.html")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except FileNotFoundError:
+        raise HTTPException(404, "sellers page not found")
+
+
+@app.get("/marketplace/agent/{lid}", response_class=HTMLResponse)
+def listing_profile_page(lid: str):
+    """Profile page for any listing — pulls data client-side via API."""
+    p = _os_agent.path.join(_os_agent.path.dirname(__file__),
+                            "agentnet", "ui", "listing_profile.html")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except FileNotFoundError:
+        raise HTTPException(404, "listing profile page not found")
+
+
+# Catalog endpoint now also surfaces approved third-party listings
+@app.get("/api/marketplace/agents")
+def marketplace_list():
+    """Catalog of agents available for hire — bundled scripts + approved
+    third-party listings. Each entry is shaped uniformly for the UI; the
+    `kind` field tells the marketplace whether to use the bundled hire flow
+    (`/api/marketplace/hire`) or the external hire flow
+    (`/api/listings/{id}/hire`)."""
+    require_ready()
+    from decisiongraph.agent_catalog import load_catalog
+    from decisiongraph import listings as _l, sellers as _s
+    pub = []
+    for a in load_catalog():
+        pub.append({
+            "id": a["id"],
+            "name": a["name"],
+            "description": a["description"],
+            "suggested_topics": a["suggested_topics"],
+            "tags": list(a.get("tags") or []) + ["bundled"],
+            "available": a["available"],
+            "kind": "bundled",
+            "seller_name": "DecisionGraph",
+        })
+    for it in _l.list_public():
+        sel = _s.get(it.get("seller_id") or "")
+        avg = _l.average_rating(it)
+        pub.append({
+            "id": it["id"],
+            "name": it["name"],
+            "description": it["description"],
+            "suggested_topics": it.get("suggested_topics") or [],
+            "tags": list(it.get("tags") or []) + ["third-party"],
+            "available": True,
+            "kind": "external",
+            "seller_name": (sel or {}).get("display_name") or "unknown",
+            "seller_id": it.get("seller_id"),
+            "rating": avg,
+            "rating_count": it.get("rating_count") or 0,
+            "hire_count": it.get("hire_count") or 0,
+        })
+    return {"agents": pub}
+
+
+@app.post("/api/marketplace/hire")
+async def marketplace_hire(req: Request):
+    """Phase 3 hire flow: pick a catalog agent, give it a scope + task, and
+    the server mints a one-shot grant, runs the agent in the sandbox against
+    THIS company's DecisionGraph, writes the learning back, revokes the
+    token, and returns the job. Reuses the Phase 1 audited lifecycle."""
+    require_ready()
+    rate_limit("agent", max_n=10, window_s=60)
+    from decisiongraph.agent_catalog import get_agent, CatalogError
+    from decisiongraph.agent_job import (
+        run_agent_job, run_agent_job_mcp, run_agent_job_react,
+        WorkspaceMemoryAdapter, AgentJobError)
+    body = await req.json() if (await req.body()) else {}
+    agent_id = body.get("agent_id", "")
+    topics = body.get("allowed_topics") or body.get("topics") or []
+    task = body.get("task", "do the work")
+    ttl = int(body.get("ttl_seconds", 600))
+    if not agent_id or not topics:
+        raise HTTPException(400, "agent_id and allowed_topics required")
+    try:
+        a = get_agent(agent_id)
+    except CatalogError as e:
+        raise HTTPException(404, str(e))
+    store = _agent_store()
+    grant = store.mint(agent_name=a["name"], allowed_topics=topics,
+                       ttl_seconds=ttl, can_write=False)
+    tags = a.get("tags") or []
+    use_react = "via-react" in tags
+    use_mcp = "via-mcp" in tags
+    try:
+        if use_react:
+            summary = run_agent_job_react(
+                store=store, ws_dg=S.dg, agent_token=grant["token"],
+                topics=topics, task=task)
+        else:
+            runner = run_agent_job_mcp if use_mcp else run_agent_job
+            summary = runner(
+                store=store, adapter=WorkspaceMemoryAdapter(S.dg),
+                agent_token=grant["token"], topics=topics,
+                agent_script=a["script_path"], task=task)
+        via = "react" if use_react else ("mcp" if use_mcp else "staged")
+        return {"hire": {"agent_id": agent_id, "agent_name": a["name"],
+                         "via": via},
+                "job": summary}
+    except AgentJobError as e:
+        raise HTTPException(422, str(e))
+
+
+@app.post("/api/orchestration/pipeline")
+async def orchestration_pipeline(req: Request):
+    """Run a multi-agent pipeline against THIS company's DecisionGraph.
+    body: { stages: [{ agent_id, topics:[str], task:str,
+                       pass_output_to_next?: bool }] }
+    """
+    require_ready()
+    rate_limit("agent", max_n=5, window_s=60)
+    from decisiongraph.orchestration import run_pipeline
+    from decisiongraph.agent_job import WorkspaceMemoryAdapter
+    body = await req.json() if (await req.body()) else {}
+    stages = body.get("stages") or []
+    if not isinstance(stages, list) or not stages:
+        raise HTTPException(400, "stages required (list)")
+    try:
+        return {"run": run_pipeline(_agent_store(),
+                                    WorkspaceMemoryAdapter(S.dg),
+                                    stages)}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, str(e))
+
+
+@app.post("/api/orchestration/coordinator")
+async def orchestration_coordinator(req: Request):
+    """Stub: coordinator mode is next on the roadmap."""
+    raise HTTPException(501, "coordinator mode not yet implemented")
+
+
+@app.post("/api/orchestration/dialog")
+async def orchestration_dialog(req: Request):
+    """Run a multi-agent dialog. Each member runs in its own sandbox,
+    speaks MCP over stdio, exchanges messages with peers via a shared bus.
+
+    body: { goal: str, max_rounds?: int,
+            members: [{ agent_id, agent_role?, topics:[str], task:str }] }
+    """
+    require_ready()
+    rate_limit("agent", max_n=3, window_s=120)
+    from decisiongraph.orchestration import run_dialog
+    from decisiongraph.agent_job import WorkspaceMemoryAdapter
+    body = await req.json() if (await req.body()) else {}
+    members = body.get("members") or []
+    goal = body.get("goal") or ""
+    max_rounds = int(body.get("max_rounds") or 3)
+    if not isinstance(members, list) or len(members) < 2:
+        raise HTTPException(400, "dialog needs >=2 members")
+    if max_rounds < 1 or max_rounds > 10:
+        raise HTTPException(400, "max_rounds must be 1..10")
+    try:
+        return {"run": run_dialog(_agent_store(),
+                                   WorkspaceMemoryAdapter(S.dg), S.dg,
+                                   members, goal=goal,
+                                   max_rounds=max_rounds)}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, str(e))
+
+
+@app.post("/api/orchestration/swarm")
+async def orchestration_swarm(req: Request):
+    """Run N agents IN PARALLEL against THIS company's DecisionGraph.
+    Each gets its own scoped grant + sandbox + audit. All write back to
+    the same DG. Returns when all have finished (or a member timed out).
+
+    body: { goal?: str,
+            members: [{ agent_id, topics:[str], task:str }, ...] }
+    """
+    require_ready()
+    rate_limit("agent", max_n=5, window_s=60)
+    from decisiongraph.orchestration import run_swarm
+    from decisiongraph.agent_job import WorkspaceMemoryAdapter
+    body = await req.json() if (await req.body()) else {}
+    members = body.get("members") or []
+    goal = body.get("goal") or ""
+    if not isinstance(members, list) or not members:
+        raise HTTPException(400, "members required (non-empty list)")
+    try:
+        return {"run": run_swarm(_agent_store(),
+                                  WorkspaceMemoryAdapter(S.dg),
+                                  S.dg,
+                                  members,
+                                  goal=goal)}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/orchestration/runs")
+def orchestration_runs(limit: int = 50):
+    require_ready()
+    from decisiongraph.orchestration import list_runs
+    return {"runs": list_runs(_agent_store(), limit=limit)}
+
+
+@app.get("/api/orchestration/runs/{run_id}")
+def orchestration_run_get(run_id: str):
+    require_ready()
+    from decisiongraph.orchestration import get_run
+    r = get_run(_agent_store(), run_id)
+    if not r:
+        raise HTTPException(404, "run not found")
+    return r
+
+
+@app.get("/orchestration", response_class=HTMLResponse)
+def orchestration_page():
+    p = _os_agent.path.join(_os_agent.path.dirname(__file__),
+                            "agentnet", "ui", "orchestration.html")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except FileNotFoundError:
+        raise HTTPException(404, "orchestration page not found")
+
+
+@app.get("/docs", response_class=HTMLResponse)
+def docs_page():
+    p = _os_agent.path.join(_os_agent.path.dirname(__file__),
+                            "agentnet", "ui", "docs.html")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except FileNotFoundError:
+        raise HTTPException(404, "docs page not found")
+
+
+@app.get("/marketplace", response_class=HTMLResponse)
+def marketplace_page():
+    p = _os_agent.path.join(_os_agent.path.dirname(__file__),
+                            "agentnet", "ui", "marketplace.html")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except FileNotFoundError:
+        raise HTTPException(404, "marketplace not found")
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_page():
+    p = _os_agent.path.join(_os_agent.path.dirname(__file__),
+                            "agentnet", "ui", "dashboard.html")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except FileNotFoundError:
+        raise HTTPException(404, "dashboard not found")
+
+
+@app.post("/api/agent/run")
+async def agent_run(req: Request):
+    """Run the bundled sample agent through the full audited lifecycle.
+    Only the bundled, vetted agent script is runnable via the API (no
+    arbitrary code path is accepted from the request)."""
+    require_ready()
+    rate_limit("agent", max_n=10, window_s=60)
+    from decisiongraph.agent_job import (
+        run_agent_job, WorkspaceMemoryAdapter, AgentJobError)
+    body = await req.json() if (await req.body()) else {}
+    token = body.get("agent_token", "")
+    topics = body.get("topics", [])
+    task = body.get("task", "summarize the scoped knowledge")
+    if not token or not topics:
+        raise HTTPException(400, "agent_token and topics required")
+    try:
+        summary = run_agent_job(
+            store=_agent_store(),
+            adapter=WorkspaceMemoryAdapter(S.dg),
+            agent_token=token,
+            topics=topics,
+            agent_script=_SAMPLE_AGENT,
+            task=task,
+        )
+        return {"job": summary}
+    except AgentJobError as e:
+        raise HTTPException(422, str(e))
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, str(e))
+
+
+@app.get("/agents", response_class=HTMLResponse)
+def agents_page():
+    p = _os_agent.path.join(_os_agent.path.dirname(__file__),
+                            "agentnet", "ui", "agents.html")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except FileNotFoundError:
+        raise HTTPException(404, "agents page not found")
+
+
+@app.get("/onboarding", response_class=HTMLResponse)
+def onboarding_page():
+    p = _os_agent.path.join(_os_agent.path.dirname(__file__),
+                            "agentnet", "ui", "onboarding.html")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except FileNotFoundError:
+        raise HTTPException(404, "onboarding page not found")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # INTEGRATIONS API
 # ──────────────────────────────────────────────────────────────────────────────
 @app.get("/api/integrations")
 def list_integrations():
     return {"integrations": S.integrations.list_all()}
+
+
+# ── Onboarding Companion: one endpoint for the dedicated /onboarding page ──
+@app.get("/api/onboarding/brief")
+async def onboarding_brief(req: Request):
+    """Aggregates everything a new joiner (or new AI session) needs:
+    repo overview, active topics, recent decisions, recent AI edits,
+    agent reputation. Reuses the get_onboarding_brief MCP tool internally."""
+    require_ready()
+    from decisiongraph.mcp_server import invoke_tool
+    qp = dict(req.query_params)
+    args = {
+        "topic":           qp.get("topic", ""),
+        "limit_decisions": int(qp.get("limit_decisions", 8)),
+        "limit_edits":     int(qp.get("limit_edits", 6)),
+        "limit_topics":    int(qp.get("limit_topics", 5)),
+    }
+    try:
+        return await invoke_tool("get_onboarding_brief", args, S.dg, S.hub, S.dm)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/integrations/git-hook")
+def get_git_hook_script(req: Request):
+    """Returns a ready-to-install bash post-commit hook script.
+    User runs ONE command on their dev machine and every git commit
+    gets posted to DG as a captured decision."""
+    require_ready()
+    base = str(req.base_url).rstrip("/")
+    ws = _CURRENT_WS.get()
+    token = getattr(ws, "token", "")
+    script = f"""#!/bin/bash
+# DecisionGraph post-commit hook — auto-capture every commit into your DG
+# Install:  curl -fsSL "{base}/api/integrations/git-hook" > .git/hooks/post-commit && chmod +x .git/hooks/post-commit
+set -e
+SHA=$(git rev-parse HEAD)
+SUBJECT=$(git log -1 --pretty=%s "$SHA")
+BODY=$(git log -1 --pretty=%b "$SHA")
+AUTHOR=$(git log -1 --pretty=%an "$SHA")
+DIFF=$(git diff-tree --no-commit-id --stat -r "$SHA" 2>/dev/null | head -40 || true)
+REPO=$(basename "$(git rev-parse --show-toplevel)")
+
+# Build JSON safely with jq if available, else python
+if command -v jq >/dev/null 2>&1; then
+  BODY_JSON=$(jq -aRs '.' <<< "$BODY")
+  DIFF_JSON=$(jq -aRs '.' <<< "$DIFF")
+  SUB_JSON=$(jq -aRs '.' <<< "$SUBJECT")
+else
+  BODY_JSON=$(python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" <<< "$BODY")
+  DIFF_JSON=$(python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" <<< "$DIFF")
+  SUB_JSON=$(python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" <<< "$SUBJECT")
+fi
+
+curl -fsS -X POST "{base}/api/mcp/call/track_decision" \\
+  -H "Content-Type: application/json" \\
+  -H "Cookie: dg_ws={token}" \\
+  -d "{{\\"question\\":\\"[commit:$AUTHOR] $REPO\\",\\"answer\\":$SUB_JSON,\\"reasoning\\":$BODY_JSON,\\"topic\\":\\"$REPO\\"}}" \\
+  >/dev/null 2>&1 || true   # never block the commit
+"""
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(script, media_type="text/x-shellscript",
+                              headers={"Content-Disposition":
+                                       'inline; filename="post-commit"'})
 
 @app.get("/api/integrations/{name}/config")
 def get_integration_config(name: str):
@@ -1276,6 +3146,11 @@ async def broadcast_session(req: Request):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
+def main():
+    """Console-script entry-point for `dg-server`."""
     print("DecisionGraph server starting on http://localhost:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+
+
+if __name__ == "__main__":
+    main()

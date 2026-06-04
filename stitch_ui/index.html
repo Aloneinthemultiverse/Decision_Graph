@@ -170,6 +170,14 @@ tailwind.config = {
       </button>
       <div id="kbPersonalProgress" class="hidden mt-md"><div class="text-tertiary text-xs font-bold animate-pulse">Ingesting…</div></div>
 
+      <!-- Danger zone: clear the entire workspace graph -->
+      <div class="mt-md pt-md border-t border-outline-variant/30 flex items-center justify-between text-xs text-on-surface-variant">
+        <span>Want a clean slate?</span>
+        <button onclick="clearWorkspace()" id="kbClearBtn" class="text-error hover:text-error/80 underline decoration-dotted underline-offset-2 flex items-center gap-xs">
+          <span class="material-symbols-outlined text-[14px]">delete_forever</span>Clear all graph data
+        </button>
+      </div>
+
       <!-- No files? Pull knowledge from the web / media -->
       <div class="mt-lg pt-md border-t border-outline-variant space-y-sm">
         <div class="text-[11px] uppercase tracking-wider text-outline">No files? Build from the web or media</div>
@@ -180,6 +188,13 @@ tailwind.config = {
         <div class="flex gap-sm">
           <input id="kbYt" placeholder="https://youtube.com/watch?v=…  (uses transcript)" class="flex-1 bg-surface-container-lowest border border-outline-variant focus:border-tertiary rounded-lg px-md py-sm text-sm focus:outline-none"/>
           <button onclick="ingestYoutube()" id="kbYtBtn" class="bg-tertiary/15 text-tertiary border border-tertiary/30 px-md rounded-lg text-sm hover:bg-tertiary/25 whitespace-nowrap">YouTube</button>
+        </div>
+        <div class="flex gap-sm">
+          <input id="kbGh" placeholder="https://github.com/owner/repo  →  docs + commits + AST chunks + folder/repo rollups + PRs" class="flex-1 bg-surface-container-lowest border border-outline-variant focus:border-primary rounded-lg px-md py-sm text-sm focus:outline-none"/>
+          <input id="kbGhBranch" placeholder="branch (optional)" class="w-32 bg-surface-container-lowest border border-outline-variant focus:border-primary rounded-lg px-md py-sm text-sm focus:outline-none"/>
+          <button onclick="ingestGithub()" id="kbGhBtn" class="bg-primary/15 text-primary border border-primary/30 px-md rounded-lg text-sm hover:bg-primary/25 whitespace-nowrap flex items-center gap-xs">
+            <span class="material-symbols-outlined text-[16px]">code</span>GitHub
+          </button>
         </div>
         <div id="kbMediaWrap" class="hidden">
           <label for="kbMedia" class="flex items-center gap-sm border border-dashed border-outline-variant rounded-lg px-md py-sm text-sm cursor-pointer hover:border-tertiary/50">
@@ -529,6 +544,50 @@ tailwind.config = {
     </div>
     <div id="mcpToolsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-gutter"></div>
   </div>
+
+  <!-- ═════════ MCP v1 — full DG surface, audited, scope-gated ═════════ -->
+  <div class="luminous rounded-xl p-lg space-y-md border border-primary/30 mt-xl">
+    <div class="flex items-center justify-between flex-wrap gap-md">
+      <div>
+        <h4 class="font-display text-headline-md text-primary flex items-center gap-sm">
+          <span class="material-symbols-outlined">verified</span>
+          MCP v1 · AgentNet
+          <span class="px-sm py-xs bg-primary/10 border border-primary/30 rounded-full text-[10px] uppercase tracking-widest font-bold">32 tools · audited</span>
+        </h4>
+        <p class="text-xs text-on-surface-variant max-w-3xl mt-xs">
+          Full DG surface (ingest, query, brain, simulation, sessions, companies) over JSON-RPC HTTP.
+          Any MCP-capable agent (Claude, Cursor, custom) can connect. Owner gets the full 32-tool surface;
+          scoped agents are topic-gated. Every call lives in the immutable audit log.
+        </p>
+      </div>
+      <div class="flex gap-sm">
+        <button onclick="mintMcpV1('owner')" class="px-md py-sm bg-primary/15 hover:bg-primary/25 border border-primary text-primary text-sm font-semibold rounded-lg">Mint owner connection</button>
+        <button onclick="mintMcpV1('agent')" class="px-md py-sm bg-tertiary/15 hover:bg-tertiary/25 border border-tertiary text-tertiary text-sm font-semibold rounded-lg">Mint scoped agent</button>
+        <a href="/marketplace" class="px-md py-sm bg-surface-container-high border border-outline-variant text-sm font-semibold rounded-lg hover:bg-surface-container-highest">Open Marketplace ↗</a>
+      </div>
+    </div>
+
+    <div id="mcpV1Form" class="hidden grid grid-cols-1 md:grid-cols-3 gap-md pt-md border-t border-outline-variant/30">
+      <div>
+        <label class="text-xs text-on-surface-variant uppercase tracking-wider">Name</label>
+        <input id="mcpV1Name" placeholder="claude-on-dg" class="w-full mt-xs bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm text-sm font-mono-data focus:outline-none focus:border-primary"/>
+      </div>
+      <div id="mcpV1TopicsWrap">
+        <label class="text-xs text-on-surface-variant uppercase tracking-wider">Allowed topics <span class="text-on-surface-variant/60">(scoped only)</span></label>
+        <input id="mcpV1Topics" placeholder="attention, refunds" class="w-full mt-xs bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm text-sm font-mono-data focus:outline-none focus:border-primary"/>
+      </div>
+      <div>
+        <label class="text-xs text-on-surface-variant uppercase tracking-wider">TTL (sec)</label>
+        <input id="mcpV1Ttl" value="86400" class="w-full mt-xs bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm text-sm font-mono-data focus:outline-none focus:border-primary"/>
+      </div>
+      <div class="md:col-span-3 flex gap-sm">
+        <button onclick="doMintMcpV1()" class="px-md py-sm bg-primary text-on-primary text-sm font-semibold rounded-lg hover:brightness-110">Generate connection</button>
+        <button onclick="document.getElementById('mcpV1Form').classList.add('hidden')" class="px-md py-sm text-on-surface-variant hover:text-on-surface text-sm">cancel</button>
+      </div>
+    </div>
+
+    <div id="mcpV1Out" class="hidden space-y-sm pt-md border-t border-outline-variant/30"></div>
+  </div>
 </section>
 
 <!-- ═════════════ SIMULATION STUDIO SECTION ═════════════ -->
@@ -662,6 +721,90 @@ tailwind.config = {
       <button onclick="storeSimulation()" id="simStoreBtn" class="btn-primary px-xl py-sm rounded-xl flex items-center gap-sm">
         <span class="material-symbols-outlined">save</span>Store in Decision Memory
       </button>
+    </div>
+  </div>
+
+  <!-- ── FORECAST — TimesFM ────────────────────────────────────── -->
+  <div class="luminous rounded-xl p-lg space-y-md">
+    <header class="flex items-center justify-between flex-wrap gap-md">
+      <div>
+        <h4 class="font-display text-headline-md flex items-center gap-sm">
+          <span class="material-symbols-outlined text-secondary">show_chart</span>Time-series Forecast
+        </h4>
+        <p class="text-on-surface-variant text-sm mt-xs max-w-2xl">
+          Project a numeric series forward using <span class="text-primary">Google TimesFM 200M</span> (with
+          Holt-Winters / linear fallback). Useful for revenue, demand, latency, or any signal you want the
+          simulator to react to.
+        </p>
+      </div>
+      <span id="fcBackendPill" class="text-xs font-mono-data px-md py-xs rounded-full bg-surface-container-highest text-on-surface-variant">backend: —</span>
+    </header>
+
+    <!-- ASK in natural language -->
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md space-y-sm">
+      <label class="text-label-sm uppercase tracking-wider text-on-surface-variant flex items-center gap-sm">
+        <span class="material-symbols-outlined text-primary text-[18px]">forum</span>
+        Ask in plain English
+      </label>
+      <div class="flex gap-sm flex-wrap">
+        <input id="fcAsk" type="text"
+          placeholder="e.g. what will revenue be over the next 4 years?"
+          class="flex-1 min-w-[260px] bg-surface-container-highest border border-outline-variant focus:border-primary rounded-lg px-md py-sm focus:outline-none"
+          onkeydown="if(event.key==='Enter') askForecast()"/>
+        <button onclick="askForecast()" id="fcAskBtn" class="btn-primary px-lg py-sm rounded-lg flex items-center gap-sm">
+          <span class="material-symbols-outlined">smart_toy</span>Ask
+        </button>
+      </div>
+      <div id="fcAskAnswer" class="hidden bg-surface-container-highest rounded-lg p-md text-sm leading-relaxed border-l-2 border-primary"></div>
+      <div class="text-[11px] text-on-surface-variant">
+        Pulls numbers from your DecisionGraph automatically; if not enough data, an LLM grounds an estimate from your context, then TimesFM projects it forward.
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-lg">
+      <div>
+        <div class="flex items-center justify-between gap-sm mb-sm flex-wrap">
+          <label class="text-label-sm uppercase tracking-wider text-on-surface-variant">Series (comma or space separated)</label>
+          <div class="flex items-center gap-sm">
+            <label class="text-label-sm text-on-surface-variant">From DecisionGraph:</label>
+            <select id="fcSeriesPicker" onchange="loadGraphSeries(this.value)"
+                    class="bg-surface-container-highest border border-outline-variant rounded-lg px-sm py-xs text-sm focus:outline-none focus:border-primary">
+              <option value="">— pick a series —</option>
+            </select>
+            <button onclick="refreshGraphSeries()" title="Refresh" class="text-on-surface-variant hover:text-primary">
+              <span class="material-symbols-outlined text-[18px]">refresh</span>
+            </button>
+          </div>
+        </div>
+        <textarea id="fcSeries" rows="3"
+          placeholder="e.g. 10, 12, 11, 13, 14, 15, 16, 18, 17, 19, 20, 22"
+          class="w-full bg-surface-container-lowest border-2 border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-xl p-md text-body-md font-mono-data resize-none focus:outline-none"></textarea>
+      </div>
+      <div>
+        <div class="flex justify-between mb-sm">
+          <label class="text-label-sm uppercase tracking-wider text-on-surface-variant">Horizon</label>
+          <span id="fcHorizonLabel" class="font-mono-data text-primary text-sm">8</span>
+        </div>
+        <input id="fcHorizon" type="range" min="1" max="64" value="8" oninput="fcHorizonLabel.textContent=this.value" class="w-full accent-primary"/>
+        <button onclick="runForecast()" id="fcBtn" class="mt-md w-full btn-primary py-sm rounded-xl flex items-center justify-center gap-sm">
+          <span class="material-symbols-outlined">auto_graph</span>Forecast
+        </button>
+      </div>
+    </div>
+
+    <div id="fcResult" class="hidden space-y-md">
+      <div class="flex flex-wrap items-center gap-md text-xs font-mono-data">
+        <span id="fcUsedPill" class="px-md py-xs rounded-full bg-primary/15 text-primary">—</span>
+        <span id="fcNotes" class="text-on-surface-variant"></span>
+      </div>
+      <div class="bg-surface-container-lowest rounded-xl p-md overflow-x-auto">
+        <svg id="fcChart" viewBox="0 0 800 240" class="w-full h-[240px]"></svg>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-sm text-xs font-mono-data">
+        <div class="bg-surface-container-highest rounded-lg p-sm"><span class="text-on-surface-variant">point</span><div id="fcPoint" class="text-on-surface mt-xs break-all"></div></div>
+        <div class="bg-surface-container-highest rounded-lg p-sm"><span class="text-on-surface-variant">95% lower</span><div id="fcLower" class="text-on-surface mt-xs break-all"></div></div>
+        <div class="bg-surface-container-highest rounded-lg p-sm"><span class="text-on-surface-variant">95% upper</span><div id="fcUpper" class="text-on-surface mt-xs break-all"></div></div>
+      </div>
     </div>
   </div>
 </section>
@@ -930,6 +1073,87 @@ function ingestYoutube(){
   const u=$("kbYt").value.trim(); if(!u){toast("Paste a YouTube URL","err");return;}
   _webIngest("/api/ingest/youtube",{url:u},"kbYtBtn","Fetching transcript");
 }
+async function clearWorkspace(){
+  if (!confirm("This will permanently delete every graph node, decision, chunk, and ingested repo in this workspace. The page will reload empty. Continue?")) {
+    return;
+  }
+  const btn = $("kbClearBtn"); const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined text-[14px]">hourglass_top</span>clearing…';
+  try {
+    const r = await fetch("/api/workspace/clear", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({confirm: "yes"})
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      toast(j.detail || "clear failed", "err");
+      return;
+    }
+    toast("Workspace cleared — reloading", "ok");
+    setTimeout(() => location.reload(), 600);
+  } catch(e){
+    toast(e.message, "err");
+  } finally {
+    btn.disabled = false; btn.innerHTML = orig;
+  }
+}
+
+async function ingestGithub(){
+  const u=$("kbGh").value.trim();
+  if(!u){toast("Paste a GitHub URL (https://github.com/owner/repo)","err");return;}
+  if(!/^https?:\/\/github\.com\//.test(u)){toast("Only github.com URLs supported","err");return;}
+  const branch = ($("kbGhBranch") && $("kbGhBranch").value.trim()) || null;
+  const b=$("kbGhBtn"); const st=$("kbWebStatus");
+  b.disabled=true;
+  st.innerHTML=`<span class="text-on-surface-variant">Queueing job…</span>`;
+  try{
+    const out=await api("/api/ingest/github",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        repo_url: u, branch: branch,
+        include_code: true, use_ast: true,
+        include_call_edges: true, include_hierarchical: true,
+        include_prs: true, incremental: true,
+      })});
+    if(!out.job_id){
+      st.innerHTML=`<span class="text-error">${escapeHtml(out.error||'no job_id returned')}</span>`;
+      return;
+    }
+    st.innerHTML=`<span class="text-on-surface-variant">Job queued (id ${out.job_id})… runs server-side, safe to wait.</span>`;
+    // poll up to ~10 min — big repos can take a while
+    for(let i=0;i<300;i++){
+      await new Promise(r=>setTimeout(r,2000));
+      let j; try{ j=await api(`/api/jobs/${out.job_id}`); }catch(e){ continue; }
+      if(j.status==="done"){
+        const r=j.result||{}; const s=r.stats||{};
+        if(r.ok){
+          const total = (s.stored||0) + (s.code_summaries||0) + (s.chunk_summaries||0)
+                      + (s.folder_summaries||0) + (s.prs||0);
+          st.innerHTML = `<span class="text-tertiary">✓ Ingested ${total} items from ${escapeHtml(s.owner||"")}/${escapeHtml(s.repo||"repo")}${branch?(' @ '+escapeHtml(branch)):''}</span><br/>`+
+            `<span class="text-xs text-on-surface-variant">`+
+            `${s.doc||0} docs · ${s.adr||0} ADRs · ${s.manifest||0} manifests · ${s.commit||0} commits<br/>`+
+            `${s.chunk_summaries||0} AST chunks · ${s.code_summaries||0} fallback file summaries · ${s.call_edges||0} call edges<br/>`+
+            `${s.folder_summaries||0} folder rollups${s.repo_summary?' · 1 repo overview':''} · ${s.prs||0} PRs<br/>`+
+            (s.incremental_skipped ? `<span class="text-primary">↻ Incremental: skipped ${s.incremental_skipped} unchanged files</span>` : '')+
+            `</span>`;
+          $("kbGh").value="";
+          try { refreshStatus && refreshStatus(); } catch(_){}
+        } else {
+          st.innerHTML=`<span class="text-error">${escapeHtml(r.error||'ingest failed')}</span>`;
+        }
+        return;
+      }
+      if(j.status==="failed"){
+        st.innerHTML=`<span class="text-error">${escapeHtml(j.error||'failed')}</span>`;
+        return;
+      }
+      st.textContent = `working… (${i*2}s) — cloning + AST + LLM summaries`;
+    }
+    st.innerHTML=`<span class="text-on-surface-variant">Still processing after 10 min — check back later via job ${out.job_id}.</span>`;
+  }catch(e){
+    st.innerHTML=`<span class="text-error">${escapeHtml(e.message)}</span>`;
+  }finally{ b.disabled=false; }
+}
 async function ingestMedia(){
   const f=$("kbMedia").files[0]; if(!f) return;
   const st=$("kbWebStatus"); st.textContent="Transcribing via Gemini (can take a minute)…";
@@ -984,6 +1208,10 @@ async function runQuery(){
   $("qBtn").disabled=true;
   try{
     const hybrid = $("qHybrid").checked;
+
+    // Repo questions go through the SAME /api/query path as PDFs.
+    // The blueprint document we ingest is part of the DG graph; deep-mode
+    // retrieval finds the right community automatically. No parallel path.
     const out=await api("/api/query",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question:q,mode:MODE,company_id:cid,hybrid})});
     $("qAnswer").textContent = out.answer || "(empty)";
     $("qResultMode").textContent = (out.mode||MODE).toUpperCase();
@@ -1141,6 +1369,168 @@ async function refreshSimulationTab(){
     const url = (s.settings || {}).mirofish_url || "";
     $("simModeLabel").textContent = url ? "MiroFish" : "local LLM (mock)";
   } catch(e){}
+  // populate forecast backend pill
+  try {
+    const b = await api("/api/forecast/backend_info");
+    const pill = $("fcBackendPill");
+    if (pill) pill.textContent = "backend: " + (b.backend || "—");
+  } catch(e){}
+  // populate graph-series picker
+  refreshGraphSeries();
+}
+
+let _GRAPH_SERIES = [];
+let _FC_AUTORAN = false;
+async function refreshGraphSeries(){
+  const sel = $("fcSeriesPicker");
+  if(!sel) return;
+  try {
+    const r = await api("/api/forecast/series");
+    _GRAPH_SERIES = r.series || [];
+    sel.innerHTML = '<option value="">— auto —</option>' +
+      _GRAPH_SERIES.map((s,i)=>`<option value="${i}">${s.label}${s.synthetic?' (demo)':''}</option>`).join("");
+    // AUTO: pick the richest non-synthetic series; otherwise the demo seed
+    if (_GRAPH_SERIES.length){
+      let bestIdx = 0, best = _GRAPH_SERIES[0];
+      _GRAPH_SERIES.forEach((s,i)=>{
+        const better = !s.synthetic && (best.synthetic || s.values.length > best.values.length);
+        if (better){ best = s; bestIdx = i; }
+      });
+      sel.value = String(bestIdx);
+      loadGraphSeries(String(bestIdx), /*silent=*/true);
+      // auto-run the forecast the first time the panel is shown
+      if (!_FC_AUTORAN){
+        _FC_AUTORAN = true;
+        setTimeout(()=>runForecast().catch(()=>{}), 200);
+      }
+    }
+  } catch(e){
+    sel.innerHTML = '<option value="">— unavailable —</option>';
+  }
+}
+function loadGraphSeries(idx, silent){
+  if (idx === "" || idx == null) return;
+  const s = _GRAPH_SERIES[Number(idx)];
+  if (!s) return;
+  $("fcSeries").value = s.values.join(", ");
+  $("fcNotes").textContent = "source: " + s.label + " · unit: " + (s.unit || "—");
+  if (!silent) toast("Loaded " + s.values.length + " points from " + s.id, "ok");
+}
+
+// ═════════════ FORECAST (TimesFM) ═════════════
+function _fcParse(text){
+  return text.split(/[,\s]+/).map(s=>s.trim()).filter(Boolean)
+    .map(Number).filter(n=>!Number.isNaN(n));
+}
+function _fcDrawChart(series, point, lower, upper){
+  const svg = $("fcChart");
+  if(!svg) return;
+  const W=800, H=240, padL=40, padR=12, padT=14, padB=24;
+  const all = [...series, ...lower, ...upper];
+  const lo = Math.min(...all), hi = Math.max(...all);
+  const span = (hi-lo) || 1;
+  const n = series.length, m = point.length, total = n + m - 1;
+  const xAt = i => padL + (i / Math.max(total-1,1)) * (W - padL - padR);
+  const yAt = v => padT + (1 - (v - lo) / span) * (H - padT - padB);
+  let g = "";
+  // ribbon (CI band) — only over forecast region
+  let ribTop="", ribBot="";
+  for(let i=0;i<m;i++){
+    const x = xAt(n - 1 + i);
+    ribTop += `${i===0?'M':'L'}${x},${yAt(upper[i])} `;
+    ribBot = `L${x},${yAt(lower[i])} ` + ribBot;
+  }
+  g += `<path d="${ribTop}${ribBot}Z" fill="rgba(199,191,255,0.18)" stroke="none"/>`;
+  // historical line
+  let hist = "";
+  series.forEach((v,i)=>{ hist += (i?'L':'M') + xAt(i) + "," + yAt(v) + " "; });
+  g += `<path d="${hist}" fill="none" stroke="#c9c4d7" stroke-width="2"/>`;
+  // forecast line — starts at last historical point
+  let fore = `M${xAt(n-1)},${yAt(series[n-1])} `;
+  point.forEach((v,i)=>{ fore += "L" + xAt(n - 1 + i + 1) + "," + yAt(v) + " "; });
+  // shift: forecast index 0 should be at position n (just after last history)
+  fore = `M${xAt(n-1)},${yAt(series[n-1])} `;
+  point.forEach((v,i)=>{ fore += "L" + xAt(n + i) + "," + yAt(v) + " "; });
+  g += `<path d="${fore}" fill="none" stroke="#c7bfff" stroke-width="2.5" stroke-dasharray="0"/>`;
+  // dots on forecast points
+  point.forEach((v,i)=>{
+    g += `<circle cx="${xAt(n+i)}" cy="${yAt(v)}" r="3" fill="#c7bfff"/>`;
+  });
+  // axes (minimal)
+  g += `<line x1="${padL}" y1="${H-padB}" x2="${W-padR}" y2="${H-padB}" stroke="#474554" stroke-width="1"/>`;
+  g += `<text x="${padL}" y="${padT-2}" font-family="JetBrains Mono" font-size="10" fill="#c9c4d7">${hi.toFixed(1)}</text>`;
+  g += `<text x="${padL}" y="${H-padB+14}" font-family="JetBrains Mono" font-size="10" fill="#c9c4d7">${lo.toFixed(1)}</text>`;
+  // divider between history & forecast
+  const xd = xAt(n-1);
+  g += `<line x1="${xd}" y1="${padT}" x2="${xd}" y2="${H-padB}" stroke="#474554" stroke-dasharray="3,4" stroke-width="1"/>`;
+  g += `<text x="${xd+4}" y="${padT+10}" font-family="JetBrains Mono" font-size="10" fill="#4ddada">forecast →</text>`;
+  svg.innerHTML = g;
+}
+async function askForecast(){
+  const q = $("fcAsk").value.trim();
+  if (!q){ toast("Type a question first","err"); return; }
+  const btn = $("fcAskBtn"); const old = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined animate-spin">progress_activity</span>thinking…';
+  const ans = $("fcAskAnswer");
+  ans.classList.remove("hidden");
+  ans.innerHTML = '<span class="text-on-surface-variant">Extracting metric + searching DecisionGraph…</span>';
+  try {
+    const j = await api("/api/forecast/ask", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({question: q})
+    });
+    // populate textarea so the user sees what was forecast
+    $("fcSeries").value = j.history.join(", ");
+    $("fcHorizon").value = j.forecast.horizon;
+    $("fcHorizonLabel").textContent = j.forecast.horizon;
+    $("fcUsedPill").textContent = j.forecast.backend || "unknown";
+    const srcTag = j.source === "graph" ? "from graph"
+                 : j.source === "llm-grounded" ? "LLM-grounded on your graph"
+                 : "LLM-inferred (no graph data)";
+    $("fcNotes").textContent = `metric: ${j.metric} · horizon: ${j.horizon} ${j.unit}(s) · history: ${srcTag} · ${j.forecast.notes || ""}`;
+    const fmt = arr => arr.map(v => Number(v).toFixed(2)).join(", ");
+    $("fcPoint").textContent = fmt(j.forecast.point);
+    $("fcLower").textContent = fmt(j.forecast.lower);
+    $("fcUpper").textContent = fmt(j.forecast.upper);
+    _fcDrawChart(j.history, j.forecast.point, j.forecast.lower, j.forecast.upper);
+    $("fcResult").classList.remove("hidden");
+    ans.innerHTML = `<div class="text-on-surface">${(j.answer||"").replace(/</g,"&lt;")}</div>
+      <div class="text-[11px] text-on-surface-variant mt-sm">source: ${srcTag} · metric=<span class="text-primary">${j.metric}</span> · horizon=${j.horizon} ${j.unit}</div>`;
+  } catch(e){
+    ans.innerHTML = `<span class="text-error">✗ ${e.message}</span>`;
+  } finally {
+    btn.disabled = false; btn.innerHTML = old;
+  }
+}
+
+async function runForecast(){
+  const text = $("fcSeries").value;
+  const series = _fcParse(text);
+  if (series.length < 4){ toast("Need at least 4 numeric values","err"); return; }
+  const horizon = parseInt($("fcHorizon").value, 10) || 8;
+  const btn = $("fcBtn");
+  const old = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined animate-spin">progress_activity</span>forecasting…';
+  try{
+    const j = await api("/api/forecast", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({values: series, horizon})
+    });
+    $("fcUsedPill").textContent = j.backend || "unknown";
+    $("fcNotes").textContent = j.notes || "";
+    const fmt = arr => arr.map(v => Number(v).toFixed(2)).join(", ");
+    $("fcPoint").textContent = fmt(j.point);
+    $("fcLower").textContent = fmt(j.lower);
+    $("fcUpper").textContent = fmt(j.upper);
+    _fcDrawChart(series, j.point, j.lower, j.upper);
+    $("fcResult").classList.remove("hidden");
+  } catch(e){
+    toast(e.message, "err");
+  } finally {
+    btn.disabled = false; btn.innerHTML = old;
+  }
 }
 
 async function runSimulation(){
@@ -1525,6 +1915,59 @@ function copyMCP(which){
   else if (which === "desktop") { text = JSON.stringify(MCP_CONFIG_CACHE.desktop, null, 2); label = "Desktop config"; }
   else { text = MCP_CONFIG_CACHE.cli; label = "CLI command"; }
   navigator.clipboard.writeText(text).then(()=>toast(`${label} copied`));
+}
+
+// ── MCP v1 (AgentNet) — owner / scoped connection minting ─────────────────
+let MCP_V1_MODE = 'owner';
+function mintMcpV1(mode){
+  MCP_V1_MODE = mode;
+  document.getElementById('mcpV1Form').classList.remove('hidden');
+  document.getElementById('mcpV1Out').classList.add('hidden');
+  document.getElementById('mcpV1TopicsWrap').style.display = (mode === 'owner') ? 'none' : 'block';
+}
+async function doMintMcpV1(){
+  const out = document.getElementById('mcpV1Out');
+  out.classList.remove('hidden');
+  out.innerHTML = '<span class="text-on-surface-variant text-sm">minting…</span>';
+  const name = (document.getElementById('mcpV1Name').value || (MCP_V1_MODE + '-mcp')).trim();
+  const ttl = parseInt(document.getElementById('mcpV1Ttl').value || '86400');
+  let body = {name, ttl_seconds: ttl};
+  let endpoint = '/api/agent/connect_owner';
+  if (MCP_V1_MODE === 'agent'){
+    const topics = document.getElementById('mcpV1Topics').value.split(',').map(s=>s.trim()).filter(Boolean);
+    if (!topics.length){ out.innerHTML = '<span class="text-error text-sm">scoped mode needs at least one topic</span>'; return; }
+    body.allowed_topics = topics;
+    endpoint = '/api/agent/connect_agent';
+  }
+  try {
+    const r = await fetch(endpoint, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const j = await r.json();
+    if (!r.ok){ out.innerHTML = `<span class="text-error text-sm">${j.detail || r.status}</span>`; return; }
+    const c = j.connection, g = j.grant;
+    out.innerHTML = `
+      <div class="grid md:grid-cols-2 gap-md">
+        <div>
+          <div class="text-[10px] uppercase tracking-widest text-on-surface-variant">URL</div>
+          <code class="text-xs font-mono-data text-primary break-all">${c.url}</code>
+          <div class="text-[10px] uppercase tracking-widest text-on-surface-variant mt-md">Bearer</div>
+          <code class="text-xs font-mono-data text-tertiary break-all">${c.auth_header}</code>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-widest text-on-surface-variant">Mode</div>
+          <span class="inline-block px-sm py-xs ${MCP_V1_MODE==='owner'?'bg-primary/15 text-primary border-primary/30':'bg-tertiary/15 text-tertiary border-tertiary/30'} border rounded-full text-[11px] font-bold uppercase tracking-wider mt-xs">${MCP_V1_MODE==='owner'?'OWNER · full 32-tool surface':'SCOPED AGENT · '+(g.allowed_topics||[]).join(', ')}</span>
+          <div class="text-[10px] uppercase tracking-widest text-on-surface-variant mt-md">Expires</div>
+          <code class="text-xs font-mono-data">${g.expires_at ? new Date(g.expires_at*1000).toLocaleString() : 'never'}</code>
+        </div>
+      </div>
+      <div class="text-[10px] uppercase tracking-widest text-on-surface-variant mt-md">claude mcp add</div>
+      <pre class="bg-surface-container-lowest p-md rounded-lg text-[11px] font-mono-data text-on-surface overflow-x-auto whitespace-pre">${c.claude_mcp_add}</pre>
+      <button onclick="navigator.clipboard.writeText(${JSON.stringify(c.claude_mcp_add)}).then(()=>toast('claude mcp add copied'))" class="px-sm py-xs bg-surface-container-high rounded-lg text-xs border border-outline-variant hover:bg-surface-container-highest">Copy command</button>
+      <div class="text-[10px] uppercase tracking-widest text-on-surface-variant mt-md">Or test with curl</div>
+      <pre class="bg-surface-container-lowest p-md rounded-lg text-[11px] font-mono-data text-on-surface-variant overflow-x-auto whitespace-pre">${c.curl_example}</pre>
+      <p class="text-xs text-on-surface-variant mt-sm">Paste the <code class="text-primary">claude mcp add</code> command into a terminal, restart Claude Code — the next session will have these tools natively in its palette.</p>`;
+  } catch(e){
+    out.innerHTML = `<span class="text-error text-sm">${e.message}</span>`;
+  }
 }
 
 function openMcpTool(name){

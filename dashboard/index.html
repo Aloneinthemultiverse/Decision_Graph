@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>DG Mission Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#05070E;--panel:rgba(18,24,38,.62);--panel2:rgba(26,34,52,.5);--line:rgba(120,140,180,.13);--line2:rgba(120,140,180,.28);
+--cyan:#36E0FF;--violet:#A78BFA;--txt:#EAF0FB;--txt2:#92A0BE;--dim:#5d688a;
+--pending:#46506a;--running:#FFC53D;--done:#34E2A0;--error:#FF5C6C;--grad:linear-gradient(135deg,#36E0FF,#A78BFA);
+--mono:'JetBrains Mono',monospace;--sans:'Inter',system-ui,sans-serif;}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:14px;display:flex;min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+#particles{position:fixed;inset:0;z-index:-2}
+body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(900px 600px at 80% -10%,rgba(54,224,255,.09),transparent 55%),radial-gradient(800px 600px at 0% 110%,rgba(167,139,250,.11),transparent 55%)}
+nav{width:228px;flex:0 0 228px;padding:22px 16px;position:sticky;top:0;height:100vh;border-right:1px solid var(--line);background:rgba(7,10,18,.55);backdrop-filter:blur(16px);z-index:5}
+.brand{display:flex;align-items:center;gap:12px;padding:4px 8px 24px}
+.mark{width:36px;height:36px;border-radius:11px;background:var(--grad);position:relative;flex:0 0 36px;box-shadow:0 0 26px -4px rgba(54,224,255,.7)}
+.mark::after{content:"";position:absolute;inset:6px;border-radius:7px;background:var(--bg)}
+.mark::before{content:"";position:absolute;inset:13px;border-radius:50%;background:var(--grad);z-index:1;animation:pulse 2s infinite}
+.brand .t{font-weight:800;font-size:15px;line-height:1.1}.brand .t span{display:block;font-weight:500;font-size:9.5px;letter-spacing:2.5px;color:var(--dim);text-transform:uppercase;margin-top:3px}
+.navitem{display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:12px;color:var(--txt2);cursor:pointer;font-size:13.5px;font-weight:500;margin-bottom:3px;position:relative;transition:.2s}
+.navitem .ic{width:18px;text-align:center;font-size:15px;opacity:.85}.navitem:hover{background:rgba(120,140,180,.07);color:var(--txt)}
+.navitem.active{background:linear-gradient(90deg,rgba(54,224,255,.15),transparent);color:#fff}
+.navitem.active::before{content:"";position:absolute;left:-16px;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--grad);box-shadow:0 0 12px var(--cyan)}
+.runpill{margin-top:22px;font-family:var(--mono);font-size:10.5px;color:var(--txt2);padding:11px 13px;border:1px solid var(--line);border-radius:13px;background:var(--panel);display:flex;align-items:center;gap:9px}
+.runpill .d{width:8px;height:8px;border-radius:50%;background:var(--pending)}
+.runpill.live .d{background:var(--running);box-shadow:0 0 0 4px rgba(255,197,61,.16),0 0 14px var(--running);animation:pulse 1.1s infinite}
+.runpill.done .d{background:var(--done)}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+main{flex:1;padding:26px 30px 50px;overflow:auto;position:relative;z-index:1}
+.screen{display:none;animation:fade .4s cubic-bezier(.2,.7,.2,1)}.screen.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1}}
+h1{font-size:25px;font-weight:900;margin:0 0 6px;letter-spacing:-.6px;background:linear-gradient(90deg,#fff,#bccbe8);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.sub{color:var(--txt2);font-size:13px;margin-bottom:18px}.sub.mono{font-family:var(--mono);font-size:12px;color:var(--dim)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:13px 15px;backdrop-filter:blur(12px);position:relative;overflow:hidden;transition:.25s}
+.tile:hover{transform:translateY(-3px);border-color:var(--line2)}.tile::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--grad)}
+.tile .k{font-size:10px;letter-spacing:1.3px;text-transform:uppercase;color:var(--dim);font-weight:600}
+.tile .v{font-family:var(--mono);font-size:20px;margin-top:6px;font-weight:600}.tile .v.ok{color:var(--done)}.tile .v.bad{color:var(--error)}.tile .v.run{color:var(--running)}
+/* ── MISSION layout: graph + agent rail ── */
+.missiongrid{display:grid;grid-template-columns:1fr 360px;gap:18px}@media(max-width:1150px){.missiongrid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:18px 20px;backdrop-filter:blur(14px);box-shadow:0 20px 50px -24px rgba(0,0,0,.7)}
+.panel h2{font-size:11px;letter-spacing:1.8px;text-transform:uppercase;color:var(--dim);margin:0 0 14px;font-weight:600;display:flex;align-items:center;gap:9px}
+.panel h2 .cnt{margin-left:auto;font-family:var(--mono);color:var(--cyan);background:rgba(54,224,255,.1);padding:2px 9px;border-radius:8px;font-size:12px}
+#graph{position:relative;height:560px;overflow:hidden;border-radius:14px}
+#gsvg{position:absolute;inset:0;pointer-events:none;z-index:0}
+.gnode{position:absolute;width:186px;transform:translate(-50%,-50%);background:linear-gradient(160deg,rgba(30,38,58,.78),rgba(16,22,36,.82));
+  border:1px solid var(--line);border-radius:14px;padding:13px 15px;z-index:1;cursor:pointer;transition:transform .4s cubic-bezier(.2,.9,.3,1),border-color .3s,box-shadow .3s;backdrop-filter:blur(6px)}
+.gnode:hover{border-color:var(--cyan);box-shadow:0 0 30px -8px var(--cyan)}
+/* box-by-box creation: each node pops in, staggered (uses `scale` so it composes
+   with the translate(-50%,-50%) centering instead of fighting it) */
+@keyframes nodeIn{0%{opacity:0;scale:.5}60%{opacity:1;scale:1.06}100%{opacity:1;scale:1}}
+.gnode{animation:nodeIn .5s cubic-bezier(.2,1,.3,1) both}
+.gnode .top{display:flex;align-items:center;justify-content:space-between}
+.gnode .st{font-weight:800;font-size:14px;letter-spacing:.3px}
+.gnode .ag{font-family:var(--mono);font-size:10.5px;color:var(--txt2);margin:7px 0 9px}.gnode .ag b{color:var(--txt)}
+.gnode .tags{display:flex;gap:5px;flex-wrap:wrap}
+.tag{font-size:8.5px;font-family:var(--mono);letter-spacing:.5px;background:rgba(120,140,180,.09);border:1px solid var(--line);color:var(--txt2);padding:2px 7px;border-radius:6px;text-transform:uppercase}
+.ico{width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:13px;border-radius:50%}
+.gnode.s-pending{opacity:.45;filter:saturate(.3)}.gnode.s-pending .st{color:var(--txt2)}.gnode.s-pending .ico{color:var(--pending)}
+.gnode.s-done{border-color:rgba(52,226,160,.45)}.gnode.s-done .st{color:var(--done)}.gnode.s-done .ico{color:var(--done)}
+.gnode.s-running{border-color:var(--running);box-shadow:0 0 45px -8px var(--running);transform:translate(-50%,-50%) scale(1.05)}
+.gnode.s-running .st{color:var(--running)}.gnode.s-running .ico{color:var(--running);animation:spin 1.4s linear infinite}
+.gnode.s-running::before{content:"";position:absolute;inset:-2px;border-radius:16px;border:1.5px solid var(--running);opacity:0;animation:ring 1.7s ease-out infinite}
+.gnode.s-error{border-color:var(--error);box-shadow:0 0 35px -10px var(--error)}.gnode.s-error .st{color:var(--error)}.gnode.s-error .ico{color:var(--error)}
+@keyframes spin{to{transform:rotate(360deg)}}@keyframes ring{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.14);opacity:0}}
+.gnode.just-done{animation:pop .6s cubic-bezier(.2,1.5,.4,1)}@keyframes pop{40%{transform:translate(-50%,-50%) scale(1.12)}}
+/* agent rail */
+.arail{max-height:740px;overflow:auto;padding-right:4px}.arail::-webkit-scrollbar{width:6px}.arail::-webkit-scrollbar-thumb{background:var(--line2);border-radius:6px}
+.acard{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:13px;margin-bottom:12px;transition:.25s}
+.acard.run{border-color:rgba(255,197,61,.35);box-shadow:0 0 26px -12px var(--running)}
+.acard .hd{display:flex;align-items:center;gap:10px}
+.acard img{width:38px;height:38px;border-radius:10px;object-fit:cover;border:1px solid var(--line2);flex:0 0 38px}
+.acard .nm{font-family:var(--mono);font-weight:600;font-size:12.5px;letter-spacing:.3px}
+.acard .id{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--dim)}
+.log{font-family:var(--mono);font-size:10px;line-height:1.65;color:var(--txt2);background:rgba(6,9,16,.6);border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin:10px 0;height:118px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+.log div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log .auth{color:#7ea2c8}.log .trace{color:var(--cyan)}.log .warn{color:var(--running)}.log .io{color:var(--violet)}.log .write{color:var(--done)}.log .done{color:var(--done)}.log .err{color:var(--error)}
+.acard .ft{display:flex;align-items:center;gap:8px}.acard .ft .files{font-size:10.5px;color:var(--txt2);font-family:var(--mono)}
+.acard .ft .tok{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--cyan)}
+.acard .tags{margin-top:9px}
+.dotpulse{width:7px;height:7px;border-radius:50%;background:var(--done)}.acard.run .dotpulse{background:var(--running);animation:pulse 1s infinite}
+.round{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12px}.round:last-child{border-bottom:none}
+.b{padding:3px 9px;border-radius:8px;font-size:10px;font-weight:600}.b.warn{background:rgba(255,197,61,.15);color:var(--running)}.b.ok{background:rgba(52,226,160,.15);color:var(--done)}.b.rev{background:rgba(255,92,108,.15);color:var(--error)}
+.empty{color:var(--dim);font-size:12.5px;font-style:italic;padding:6px 0}
+a.site{display:inline-block;margin-top:10px;color:var(--cyan);font-family:var(--mono);font-size:12px;text-decoration:none;border:1px solid var(--cyan);border-radius:10px;padding:8px 14px}
+textarea{width:100%;min-height:140px;background:rgba(6,9,16,.7);border:1px solid var(--line2);border-radius:14px;color:var(--txt);padding:16px;font-family:var(--sans);font-size:14.5px;resize:vertical}
+textarea:focus{outline:none;border-color:var(--cyan)}
+.chips{display:flex;gap:9px;flex-wrap:wrap;margin:16px 0}.chip{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-radius:999px;padding:6px 14px;color:var(--txt2);background:var(--panel2)}
+button{background:var(--grad);color:#06121c;border:none;border-radius:12px;padding:13px 26px;font-weight:700;cursor:pointer;font-size:14px}
+.cmd{font-family:var(--mono);font-size:12px;background:rgba(6,9,16,.85);border:1px solid var(--line2);border-radius:12px;padding:13px 15px;margin-top:16px;color:var(--cyan);word-break:break-all}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}.ctab{font-size:12px;border:1px solid var(--line);border-radius:10px;padding:8px 14px;cursor:pointer;color:var(--txt2);background:var(--panel2);font-weight:500}
+.ctab.active{background:linear-gradient(135deg,rgba(54,224,255,.16),rgba(167,139,250,.12));color:#fff;border-color:transparent}.ctab .n{font-family:var(--mono);color:var(--cyan);margin-left:7px;font-size:11px}
+.clist .row{display:flex;gap:18px;padding:12px;border-radius:10px}.clist .row:hover{background:rgba(120,140,180,.05)}.clist .rn{flex:0 0 250px;color:var(--cyan);font-family:var(--mono);font-size:12.5px}.clist .ds{color:var(--txt2);font-size:13px}
+input.search{width:100%;background:rgba(6,9,16,.7);border:1px solid var(--line2);border-radius:12px;color:var(--txt);padding:12px 15px;margin-bottom:14px;font-family:var(--mono);font-size:12.5px}
+.ucgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.uc{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:22px;position:relative;overflow:hidden;transition:.25s}.uc:hover{transform:translateY(-5px);border-color:var(--line2)}
+.uc::before{content:"";position:absolute;right:-40px;top:-40px;width:120px;height:120px;border-radius:50%;background:var(--grad);opacity:.08;filter:blur(6px)}
+.uc .ic{font-size:28px;margin-bottom:14px}.uc .t{font-weight:700;font-size:16px}.uc .d{color:var(--txt2);font-size:13px;margin-top:6px}.uc .ex{color:var(--dim);font-size:11.5px;font-style:italic;margin-top:14px;font-family:var(--mono)}
+.badge{position:absolute;top:18px;right:18px;font-size:9px;padding:4px 10px;border-radius:999px;font-weight:700}.badge.live{background:rgba(52,226,160,.16);color:var(--done)}.badge.beta{background:rgba(255,197,61,.16);color:var(--running)}
+</style></head>
+<body>
+<canvas id="particles"></canvas>
+<nav>
+  <div class="brand"><div class="mark"></div><div class="t">Mission Control<span>DecisionGraph OS</span></div></div>
+  <div class="navitem active" data-s="mission"><span class="ic">◎</span> Mission Control</div>
+  <div class="navitem" data-s="launch"><span class="ic">▶</span> Launch</div>
+  <div class="navitem" data-s="trace"><span class="ic">⌕</span> Subtask Trace</div>
+  <div class="navitem" data-s="catalog"><span class="ic">▦</span> Catalog</div>
+  <div class="navitem" data-s="usecases"><span class="ic">◈</span> Use Cases</div>
+  <div class="navitem" data-s="dg"><span class="ic">◇</span> DecisionGraph</div>
+  <div class="navitem" data-s="graph"><span class="ic">◈</span> Graph Viewer</div>
+  <div id="runpill" class="runpill"><span class="d"></span><span id="runlabel">idle</span></div>
+</nav>
+<main>
+  <section class="screen active" id="s-mission">
+    <h1>Mission Control</h1><div class="sub mono" id="mtask">no active run</div>
+    <div class="tiles" id="tiles"></div>
+    <div class="missiongrid">
+      <div class="panel"><h2>Agent Pipeline <span class="cnt" id="pcount">0/0</span></h2><div id="graph"><svg id="gsvg"></svg></div></div>
+      <div>
+        <div class="panel" style="margin-bottom:16px"><h2>Active Agents <span class="cnt" id="acount">00</span></h2><div class="arail" id="agents"><div class="empty">no agents yet</div></div></div>
+        <div class="panel"><h2>Self-correction · boot gate</h2><div id="rounds"><div class="empty">no rounds yet</div></div><div id="bootbox"></div></div>
+      </div>
+    </div>
+  </section>
+  <section class="screen" id="s-launch"><h1>Launch a build</h1><div class="sub">The dispatcher chooses the agents &amp; skills.</div>
+    <div class="panel"><textarea id="taskinput" placeholder="e.g. Build a website for a surf school named Tide…"></textarea><div class="chips" id="catchips"></div><button onclick="showCmd()">Dispatch ▶</button><div class="cmd" id="cmdbox" style="display:none"></div></div></section>
+  <section class="screen" id="s-trace"><h1>Subtask Trace</h1><div class="sub" id="tracehint">select a node</div><div id="tracebody"></div></section>
+  <section class="screen" id="s-catalog"><h1>Capability Catalog</h1><div class="sub">The dispatcher's menu.</div><div class="tabs" id="ctabs"></div><input class="search" id="csearch" placeholder="filter…" oninput="renderCatalog()"/><div class="panel clist" id="clist"></div></section>
+  <section class="screen" id="s-usecases"><h1>Use Cases</h1><div class="sub">The OS routes any of these.</div><div class="ucgrid" id="ucgrid"></div></section>
+  <section class="screen" id="s-dg"><h1>DecisionGraph</h1><div class="sub">The OS's memory — code graph, shared CAG, decisions logged, and consolidated sessions.</div>
+    <div class="tiles" id="dgtiles"></div>
+    <div class="missiongrid">
+      <div class="panel"><h2>Code graph — files indexed</h2><div id="dgfiles"><div class="empty">no graph yet</div></div></div>
+      <div class="panel"><h2>Memory · consolidation</h2><div id="dgmem"><div class="empty">no run yet</div></div></div>
+    </div>
+  </section>
+  <section class="screen" id="s-graph"><h1>Graph Viewer</h1>
+    <div class="sub">Force-directed view of DG's knowledge graph for the OS workspace. Pulled live from <code>localhost:8000/api/graph</code>.</div>
+    <div class="tabs" style="margin-bottom:12px">
+      <span class="gvtab active" data-scope="decisions">Decision Memory</span>
+      <span class="gvtab" data-scope="knowledge">Knowledge Graph</span>
+      <span class="gvtab" data-scope="sessions">Sessions</span>
+      <button onclick="loadGraph()" style="margin-left:auto;padding:7px 16px;font-size:12px;border-radius:9px;cursor:pointer">↻ Reload</button>
+    </div>
+    <div class="panel" style="padding:0;overflow:hidden">
+      <div id="gvstats" style="padding:11px 16px;font-family:var(--mono);font-size:12px;color:var(--txt2);border-bottom:1px solid var(--line)">loading…</div>
+      <canvas id="gvcanvas" style="display:block;width:100%;height:560px;background:#06080f"></canvas>
+    </div>
+  </section>
+</main>
+<script>
+const $=id=>document.getElementById(id);const esc=s=>(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+let STATE={},CAT={},curCat=null,traceIdx=null,_dagSig='',prevStatus={},LOGS={},TOK={};
+const ICON={done:'✔',running:'↻',pending:'⧗',error:'⚠'};
+(function(){const c=$('particles'),x=c.getContext('2d');let w,h,P;function rs(){w=c.width=innerWidth;h=c.height=innerHeight;P=Array.from({length:Math.min(85,innerWidth/18|0)},()=>({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*.22,vy:(Math.random()-.5)*.22}))}rs();addEventListener('resize',rs);
+(function loop(){x.clearRect(0,0,w,h);for(const p of P){p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>w)p.vx*=-1;if(p.y<0||p.y>h)p.vy*=-1}
+for(let i=0;i<P.length;i++)for(let j=i+1;j<P.length;j++){const a=P[i],b=P[j],d=Math.hypot(a.x-b.x,a.y-b.y);if(d<120){x.strokeStyle='rgba(80,140,200,'+(.09*(1-d/120))+')';x.beginPath();x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.stroke()}}
+for(const p of P){x.fillStyle='rgba(120,170,220,.45)';x.beginPath();x.arc(p.x,p.y,1.3,0,7);x.fill()}requestAnimationFrame(loop)})()})();
+document.querySelectorAll('.navitem').forEach(n=>n.onclick=()=>{document.querySelectorAll('.navitem').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));n.classList.add('active');$('s-'+n.dataset.s).classList.add('active');if(n.dataset.s==='trace')renderTrace();if(n.dataset.s==='mission')requestAnimationFrame(layoutGraph)});
+function go(s){document.querySelector(`.navitem[data-s=${s}]`).click()}
+/* ── live graph viewer (hits DG server :8000) ── */
+let GV={scope:'decisions',nodes:[],edges:[],raf:null};
+const DG_WS='vcoB-xTSn7OJfDLERszlxA';   // YOUR workspace — where the build's graph lives
+async function loadGraph(){
+  $('gvstats').textContent='loading from DISK (separate instance — no cache)…';
+  try{
+    // SEPARATE INSTANCE: read pkl files DIRECTLY from disk, bypassing the DG
+    // server's in-memory cache that was serving 0 nodes.
+    const r=await fetch(`/disk/graph?ws=${DG_WS}&scope=${GV.scope}`);
+    const d=await r.json();
+    GV.nodes=(d.nodes||[]).map((n,i)=>({...n,x:Math.random()*900-450,y:Math.random()*500-250,vx:0,vy:0,r:Math.max(6,(n.size||14)*0.5)}));
+    const idx={};GV.nodes.forEach((n,i)=>idx[n.id]=i);
+    GV.edges=(d.edges||[]).map(e=>({a:idx[e.from],b:idx[e.to],lbl:e.label||''})).filter(e=>e.a!=null&&e.b!=null);
+    $('gvstats').textContent=`scope=${GV.scope} · ${GV.nodes.length} nodes · ${GV.edges.length} edges · workspace=${DG_WS} · source=${d.source||'?'}`+(d.empty?' (empty — no data on disk yet)':'');
+    if(!GV.raf) tickGraph();
+  }catch(e){
+    $('gvstats').textContent='⚠ failed to load: '+e.message+' — is DG server up on :8000?';
+  }
+}
+function tickGraph(){
+  const c=$('gvcanvas');if(!c||!c.getContext){GV.raf=null;return;}
+  const w=c.width=c.clientWidth,h=c.height=c.clientHeight,x=c.getContext('2d');
+  const N=GV.nodes,E=GV.edges;
+  // physics: gentle repulsion + edge springs + center pull
+  for(let i=0;i<N.length;i++){
+    for(let j=i+1;j<N.length;j++){
+      const a=N[i],b=N[j],dx=b.x-a.x,dy=b.y-a.y,d=Math.max(20,Math.hypot(dx,dy));
+      const f=600/(d*d);a.vx-=dx/d*f;a.vy-=dy/d*f;b.vx+=dx/d*f;b.vy+=dy/d*f;}}
+  for(const e of E){const a=N[e.a],b=N[e.b];if(!a||!b)continue;
+    const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1,f=(d-90)*0.012;
+    a.vx+=dx/d*f;a.vy+=dy/d*f;b.vx-=dx/d*f;b.vy-=dy/d*f;}
+  for(const n of N){n.vx-=n.x*0.003;n.vy-=n.y*0.003;n.vx*=0.85;n.vy*=0.85;n.x+=n.vx;n.y+=n.vy;}
+  // draw
+  x.fillStyle='#06080f';x.fillRect(0,0,w,h);x.save();x.translate(w/2,h/2);
+  x.strokeStyle='rgba(120,140,180,.22)';x.lineWidth=1;
+  for(const e of E){const a=N[e.a],b=N[e.b];if(!a||!b)continue;
+    x.beginPath();x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.stroke();}
+  for(const n of N){
+    x.beginPath();x.fillStyle=n.color||'#c7bfff';x.shadowColor=n.color||'#c7bfff';x.shadowBlur=12;
+    x.arc(n.x,n.y,n.r,0,7);x.fill();x.shadowBlur=0;
+    if(n.r>=10){x.fillStyle='#EAF0FB';x.font='11px Inter,sans-serif';x.textAlign='center';
+      x.fillText((n.label||n.id||'').slice(0,18),n.x,n.y+n.r+12);}
+  }
+  x.restore();
+  GV.raf=requestAnimationFrame(tickGraph);
+}
+document.querySelectorAll('.gvtab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.gvtab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');GV.scope=t.dataset.scope;loadGraph();
+});
+// gvtab needs the same look as ctab (style hook only — handlers are unique now)
+const _gvst=document.createElement('style');_gvst.textContent='.gvtab{font-size:12px;border:1px solid var(--line);border-radius:10px;padding:8px 14px;cursor:pointer;color:var(--txt2);background:var(--panel2);font-weight:500}.gvtab.active{background:linear-gradient(135deg,rgba(54,224,255,.16),rgba(167,139,250,.12));color:#fff;border-color:transparent}';document.head.appendChild(_gvst);
+// hook into nav: load when user clicks Graph Viewer
+document.querySelectorAll('.navitem').forEach(n=>{const old=n.onclick;n.onclick=function(){old&&old.call(this);if(n.dataset.s==='graph')loadGraph();};});
+function tileHTML(k){return `<div class="tile"><div class="k">${k}</div><div class="v">—</div></div>`}
+/* graph node positions: zigzag → crossing edges. x kept within 14–86% so the
+   left/right nodes never clip past the panel edge (was cutting off node #1). */
+function posFor(i,n){const x=14+i*(72/Math.max(1,n-1));const ys=[28,72,50,66,34];const y=ys[i%ys.length];return[x,y]}
+function renderMission(d){
+  $('mtask').textContent=d.task||'no active run';
+  const subs=d.subtasks||[];const done=subs.filter(s=>s.status==='done').length;
+  const bg=d.boot_gate||{};const bgv=bg.status==='pass'?'PASS':bg.status==='fail'?('FAIL '+bg.errors):(bg.status||'—');
+  if(!$('tiles').children.length)$('tiles').innerHTML=[ 'Task type','Subtasks','Code graph','CAG files','Scaffold','Boot gate','Elapsed'].map(tileHTML).join('');
+  const T=$('tiles').querySelectorAll('.v');
+  T[0].textContent=d.task_type||'—';T[1].textContent=subs.length?`${done}/${subs.length}`:'0';T[1].className='v '+(subs.length&&done<subs.length?'run':'');
+  T[2].textContent=`${d.code_graph?.symbols||0} · ${d.code_graph?.calls||0}`;T[3].textContent=d.cag_files||0;T[4].textContent=d.scaffold?d.scaffold.stack:'—';
+  T[5].textContent=bgv;T[5].className='v '+(bg.status==='pass'?'ok':bg.status==='fail'?'bad':'');T[6].textContent=(d.elapsed_s||0)+'s';
+  $('pcount').textContent=`${done}/${subs.length}`;
+  const sig=JSON.stringify(subs.map(s=>[s.status,s.builder,(s.skills||[]).slice(0,2)]));
+  if(sig!==_dagSig){_dagSig=sig;const g=$('graph');[...g.querySelectorAll('.gnode')].forEach(e=>e.remove());
+    subs.forEach((s,i)=>{const[px,py]=posFor(i,subs.length);const el=document.createElement('div');el.className='gnode s-'+s.status;el.style.left=px+'%';el.style.top=py+'%';el.style.animationDelay=(i*0.09)+'s';el.dataset.i=i;el.onclick=()=>openTrace(i);
+      el.innerHTML=`<div class="top"><span class="st">${esc((s.step||s.section||'').toUpperCase())}</span><span class="ico">${ICON[s.status]||'•'}</span></div>
+        <div class="ag">AGENT: <b>${esc((s.builder||(s.agents||[])[0]||'—').toUpperCase())}</b></div>
+        <div class="tags">${(s.skills||[]).slice(0,2).map(t=>`<span class="tag">${esc(t.split('-')[0])}</span>`).join('')}</div>`;
+      g.appendChild(el);
+      if(s.status==='done'&&prevStatus[i]&&prevStatus[i]!=='done'){el.classList.add('just-done');setTimeout(()=>el.classList.remove('just-done'),700)}prevStatus[i]=s.status;});
+    requestAnimationFrame(layoutGraph);}
+  renderAgents(subs);
+  const rounds=(d.self_correction?.rounds)||[];
+  $('rounds').innerHTML=rounds.length?rounds.map(r=>`<div class="round"><span class="b ${r.reverted?'rev':'warn'}">R${r.round}</span><span>${r.errors} error(s)${r.reverted?' → reverted':''}</span></div>`).join(''):'<div class="empty">no rounds yet</div>';
+  $('bootbox').innerHTML=(bg.status==='pass'?'<div class="round"><span class="b ok">BOOT</span><span>type-check PASSED</span></div>':bg.status==='fail'?`<div class="round"><span class="b rev">BOOT</span><span>${bg.errors} residual error(s)</span></div>`:'')+(d.site_url?`<a class="site" href="${esc(d.site_url)}" target="_blank">View live site ↗</a>`:'');
+}
+/* SVG edges + packets between graph nodes */
+let EDGES=[];
+function layoutGraph(){const g=$('graph'),svg=$('gsvg'),nodes=[...g.querySelectorAll('.gnode')];if(!nodes.length){svg.innerHTML='';EDGES=[];return;}
+  const W=g.clientWidth,H=g.clientHeight;svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('width',W);svg.setAttribute('height',H);
+  const gr=g.getBoundingClientRect();const ctr=n=>{const r=n.getBoundingClientRect();return[r.left+r.width/2-gr.left,r.top+r.height/2-gr.top]};
+  let paths='',defs=`<defs><linearGradient id="eg" x1="0" x2="1"><stop offset="0" stop-color="#36E0FF"/><stop offset="1" stop-color="#A78BFA"/></linearGradient><filter id="gl"><feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;EDGES=[];
+  for(let i=0;i<nodes.length-1;i++){const[x1,y1]=ctr(nodes[i]),[x2,y2]=ctr(nodes[i+1]);const mx=(x1+x2)/2,dd=`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+    const st=STATE.subtasks?.[i]?.status,act=st==='done'||st==='running';
+    paths+=`<path d="${dd}" fill="none" stroke="${act?'url(#eg)':'rgba(120,140,180,.16)'}" stroke-width="${act?2.2:1.4}" ${act?'stroke-dasharray="6 8"':''}/>`;if(act)EDGES.push(dd);}
+  let pk='';EDGES.forEach((_,k)=>{for(let p=0;p<2;p++)pk+=`<circle r="3.6" fill="#a8ecff" filter="url(#gl)" data-e="${k}" data-o="${p*.5}"/>`});
+  svg.innerHTML=defs+paths+pk;}
+let pt=0;(function pl(){pt+=0.005;const svg=$('gsvg'),aps=[...svg.querySelectorAll('path')];
+  svg.querySelectorAll('circle[data-e]').forEach(c=>{const dd=EDGES[+c.dataset.e];if(!dd){c.style.opacity=0;return}const path=aps.find(p=>p.getAttribute('d')===dd);if(!path)return;
+    try{const L=path.getTotalLength(),f=(pt+ +c.dataset.o)%1,pn=path.getPointAtLength(f*L);c.setAttribute('cx',pn.x);c.setAttribute('cy',pn.y);c.style.opacity=(f<.05||f>.95)?0:1}catch(e){}});
+  svg.querySelectorAll('path[stroke^="url"]').forEach(p=>p.style.strokeDashoffset=(-pt*70)%200);requestAnimationFrame(pl)})();
+addEventListener('resize',()=>requestAnimationFrame(layoutGraph));
+/* ── live agent log feed ── */
+const FLAVOR=[['auth','[AUTH] Session validated for USER_OS_ADMIN'],['trace','[TRACE] Trace analysis for NODE_%S started'],['io','[IO] Syncing local code graph to cloud…'],['warn','[WARN] Resource contention at NODE_%S'],['trace','[TRACE] Resolving symbol table · %N refs'],['io','[IO] CAG slice loaded · %C files'],['auth','[GRANT] scoped AgentNet token minted']];
+function pushLog(name,cls,msg){LOGS[name]=LOGS[name]||[];LOGS[name].push({cls,msg});if(LOGS[name].length>9)LOGS[name].shift();}
+function renderAgents(subs){
+  const order=[];const map={};subs.forEach(s=>{const n=s.builder||(s.agents||[])[0];if(!n)return;if(!map[n]){map[n]={name:n,st:s.status,sk:s.skills||[],files:0,steps:[]};order.push(n)}map[n].files+=(s.files||[]).length;map[n].steps.push(s.step);if(s.status==='running')map[n].st='running';else if(s.status==='done'&&map[n].st!=='running')map[n].st='done';});
+  $('acount').textContent=String(order.length).padStart(2,'0');
+  // generate flavor log lines for running/active agents
+  order.forEach(n=>{const a=map[n];TOK[n]=(TOK[n]||40)+ (a.st==='running'?Math.floor(8+Math.random()*22):0);
+    if(a.st==='running'&&Math.random()<.8){const f=FLAVOR[Math.floor(Math.random()*FLAVOR.length)];
+      pushLog(n,f[0],f[1].replace('%S',(a.steps.slice(-1)[0]||'CORE').toUpperCase()).replace('%N',40+Math.floor(Math.random()*900)).replace('%C',STATE.cag_files||0));}});
+  const html=order.map(n=>{const a=map[n];const img='https://i.pravatar.cc/76?u='+encodeURIComponent(n);
+    const lg=(LOGS[n]||[{cls:'auth',msg:'[INIT] agent '+n+' online'}]).map(l=>`<div class="${l.cls}">&gt; ${esc(l.msg)}</div>`).join('');
+    return `<div class="acard ${a.st==='running'?'run':''}"><div class="hd"><img src="${img}" onerror="this.style.display='none'"/><div><div class="nm">${esc(n.toUpperCase())}</div></div><span class="id">ID: ${(''+(n.length*733%9999)).padStart(4,'0')}</span></div>
+      <div class="log">${lg}</div>
+      <div class="ft"><span class="dotpulse"></span><span class="files">${a.files} FILES WRITTEN</span><span class="tok">T: ${(TOK[n]/1)|0}k</span></div>
+      <div class="tags">${a.sk.slice(0,2).map(t=>`<span class="tag">${esc(t.split('-')[0])}</span>`).join('')}</div></div>`;}).join('');
+  $('agents').innerHTML=html||'<div class="empty">no agents yet</div>';
+}
+function openTrace(i){traceIdx=i;go('trace')}
+function renderTrace(){const subs=STATE.subtasks||[];if(traceIdx===null&&subs.length)traceIdx=0;const s=subs[traceIdx];if(!s){$('tracehint').textContent='no run yet';$('tracebody').innerHTML='';return;}
+  $('tracehint').innerHTML='<div class="tabs" style="margin-top:12px">'+subs.map((x,i)=>`<span class="ctab ${i==traceIdx?'active':''}" onclick="traceIdx=${i};renderTrace()">${esc(x.step||x.section)}</span>`).join('')+'</div>';
+  $('tracebody').innerHTML=`<div class="panel" style="border-color:var(--line2);margin-bottom:16px"><h2>${esc(s.section)} · ${esc(s.step)}</h2><div style="font-size:17px;font-weight:700">${esc(s.title)}</div></div>
+   <div class="missiongrid"><div><div class="panel" style="margin-bottom:16px"><h2>Builder persona</h2><div class="nm" style="color:var(--cyan);font-size:15px;font-family:var(--mono)">${esc(s.builder||(s.agents||[])[0]||'—')}</div><div style="color:var(--txt2);font-size:12px;margin-top:8px;font-family:var(--mono)">status: ${esc(s.status)} · candidates: ${esc((s.agents||[]).join(', '))}</div></div>
+   <div class="panel"><h2>Files written (${(s.files||[]).length})</h2>${(s.files||[]).map(f=>`<div class="round"><span class="b ok">FILE</span><span style="font-family:var(--mono);font-size:12px">${esc(f)}</span></div>`).join('')||'<div class="empty">none</div>'}</div></div>
+   <div><div class="panel" style="margin-bottom:16px"><h2>Skills</h2><div class="tags">${(s.skills||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')||'<span class="empty">none</span>'}</div></div>
+   <div class="panel"><h2>Rules</h2><div class="tags">${(s.rules||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')||'<span class="empty">none</span>'}</div></div></div></div>`;}
+async function showCmd(){
+  const t=($('taskinput').value||'').trim();
+  $('cmdbox').style.display='block';
+  if(!t){$('cmdbox').textContent='enter a task first';return;}
+  $('cmdbox').textContent='⟳ dispatching… launching the OS build';
+  try{
+    const r=await fetch('/launch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task:t})});
+    const j=await r.json();
+    if(j.ok){$('cmdbox').innerHTML='✅ build launched (pid '+j.pid+') — switch to <b>Mission Control</b> to watch it build box-by-box';go('mission');}
+    else{$('cmdbox').textContent='⚠ '+(j.error||'launch failed')+' — or run manually: python os_build.py "'+t.replace(/"/g,'\\"')+'"';}
+  }catch(e){
+    $('cmdbox').textContent='⚠ Dispatch needs the launch server. Run: python dashboard_server.py   (then reload). CLI: BUILD_MODEL=gemini-2.5-flash python os_build.py "'+t.replace(/"/g,'\\"')+'"';
+  }
+}
+function renderDG(d){
+  if(!$('dgtiles'))return;
+  const m=d.memory||{};const cg=d.code_graph||{};
+  $('dgtiles').innerHTML=['Symbols (nodes)|'+(cg.symbols||0),'Call edges|'+(cg.calls||0),'CAG files|'+(d.cag_files||0),'Decisions|'+(m.decisions||0),'Sessions|'+(m.sessions||0),'Edits|'+(m.edits||0)]
+    .map(s=>{const[k,v]=s.split('|');return `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`}).join('');
+  const files={};(d.subtasks||[]).forEach(s=>(s.files||[]).forEach(f=>files[f]=s.step));
+  const fk=Object.keys(files);
+  $('dgfiles').innerHTML=fk.length?fk.map(f=>`<div class="round"><span class="b ok">${esc(files[f])}</span><span style="font-family:var(--mono);font-size:11.5px">${esc(f)}</span></div>`).join(''):'<div class="empty">no graph yet</div>';
+  $('dgmem').innerHTML=(m.sessions!=null)?`<div class="round"><span class="b ok">SLEEP</span><span>${m.sessions} sessions consolidated · ${m.edits} edits · ${m.decisions} decisions · ${m.archived} archived</span></div>`+((m.hot_files||[]).length?`<div style="margin-top:10px;color:var(--txt2);font-size:12px;font-family:var(--mono)">hot files:<br>${m.hot_files.map(esc).join('<br>')}</div>`:''):'<div class="empty">runs after the build (consolidation step)</div>';
+}
+function renderCatalog(){if(!curCat)return;const q=($('csearch').value||'').toLowerCase();const it=(CAT[curCat]||[]).filter(x=>!q||x.name.toLowerCase().includes(q)||x.desc.toLowerCase().includes(q));$('clist').innerHTML=it.map(x=>`<div class="row"><div class="rn">${esc(x.name)}</div><div class="ds">${esc(x.desc)}</div></div>`).join('')||'<div class="empty">no matches</div>'}
+fetch('catalog.json').then(r=>r.json()).then(c=>{CAT=c;curCat=Object.keys(c)[0];$('catchips').innerHTML=Object.keys(c).slice(0,6).map(k=>`<span class="chip">${esc(k.split(' ')[0])} ${c[k].length}</span>`).join('');
+  $('ctabs').innerHTML=Object.keys(c).map((k,i)=>`<div class="ctab ${i==0?'active':''}" data-c="${esc(k)}">${esc(k)}<span class="n">${c[k].length}</span></div>`).join('');document.querySelectorAll('.ctab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.ctab').forEach(x=>x.classList.remove('active'));t.classList.add('active');curCat=t.dataset.c;renderCatalog()});renderCatalog()}).catch(()=>{});
+const UC=[['🌐','Build Software','Full-stack apps, APIs, CLIs','“cafe website named Alone”','live'],['📣','Marketing Campaign','GTM, copy, emails, social','“GTM for a smart lamp”','beta'],['📋','Product Spec / PRD','Specs, roadmaps, stories','“PRD for a habit tracker”','beta'],['🧮','Data Pipeline','ETL, ML, RAG','“ETL for sales data”','beta'],['🔎','Research Report','Deep research','“EV battery market”','beta'],['💬','Ops & Comms','Slack/Jira/inbox','“triage my inbox”','beta']];
+$('ucgrid').innerHTML=UC.map(u=>`<div class="uc"><span class="badge ${u[4]}">${u[4].toUpperCase()}</span><div class="ic">${u[0]}</div><div class="t">${u[1]}</div><div class="d">${u[2]}</div><div class="ex">${u[3]}</div></div>`).join('');
+let _beat=0;const _spin=['◐','◓','◑','◒'];
+async function tick(){
+  _beat++;
+  let d;try{d=await(await fetch('run_state.json?_='+Date.now())).json()}catch(e){
+    $('runlabel').textContent='NO DATA '+_spin[_beat%4];return;}
+  STATE=d;const st=d.status||'idle';const rp=$('runpill');
+  rp.className='runpill'+(st==='done'?' done':(st==='building'||st==='dispatching')?' live':'');
+  // heartbeat: spinner proves the poll loop is alive even when state is unchanged
+  $('runlabel').textContent=st.toUpperCase()+'  '+_spin[_beat%4];
+  try{renderMission(d);}catch(e){console.error('renderMission',e);}
+  try{renderDG(d);}catch(e){console.error('renderDG',e);}
+  try{if($('s-trace').classList.contains('active'))renderTrace();}catch(e){console.error('renderTrace',e);}
+}
+setInterval(tick,1500);tick();
+</script></body></html>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net">
+  <diagram name="Architecture">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="2" value="API Gateway" style="rounded=1" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="40"/></mxCell>
+        <mxCell id="3" value="UserService" style="rounded=1" vertex="1" parent="1"><mxGeometry x="240" y="40" width="120" height="40"/></mxCell>
+        <mxCell id="4" value="OrderService" style="rounded=1" vertex="1" parent="1"><mxGeometry x="240" y="120" width="120" height="40"/></mxCell>
+        <mxCell id="5" value="Postgres" style="cylinder" vertex="1" parent="1"><mxGeometry x="440" y="40" width="80" height="60"/></mxCell>
+        <mxCell id="6" value="Redis cache" style="cylinder" vertex="1" parent="1"><mxGeometry x="440" y="120" width="80" height="60"/></mxCell>
+        <mxCell id="7" value="routes /users/*" edge="1" source="2" target="3" parent="1"><mxGeometry/></mxCell>
+        <mxCell id="8" value="routes /orders/*" edge="1" source="2" target="4" parent="1"><mxGeometry/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

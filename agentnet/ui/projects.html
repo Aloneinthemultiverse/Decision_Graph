@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Projects · DecisionGraph</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script>
+tailwind.config={darkMode:"class",theme:{extend:{colors:{
+"surface-container-lowest":"#0e0d15","surface-container-low":"#1c1b23","surface":"#13121b",
+"surface-container":"#201f27","surface-container-high":"#2a2932",
+"on-surface":"#e5e0ed","on-surface-variant":"#c9c4d7","outline-variant":"#474554",
+"primary":"#c7bfff","on-primary":"#2b009e","secondary":"#4ddada","tertiary":"#51df9c","error":"#ffb4ab"},
+borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem",full:"9999px"},
+spacing:{gutter:"24px",lg:"24px",margin:"32px",xl:"40px",md:"16px",xs:"4px",sm:"8px"},
+fontFamily:{"label-sm":["IBM Plex Sans"],"body-md":["Inter"],"body-lg":["Inter"],
+"headline-md":["Inter"],"display":["Inter"],"mono-data":["JetBrains Mono"]},
+fontSize:{"label-sm":["13px",{lineHeight:"1",letterSpacing:"0.05em",fontWeight:"500"}],
+"micro-caps":["10px",{lineHeight:"1",letterSpacing:"0.1em",fontWeight:"700"}],
+"body-md":["16px",{lineHeight:"1.55"}],"body-lg":["18px",{lineHeight:"1.6"}],
+"headline-md":["24px",{lineHeight:"1.3",fontWeight:"600"}],
+"display":["44px",{lineHeight:"1.1",letterSpacing:"-0.02em",fontWeight:"700"}],
+"mono-data":["13px",{lineHeight:"1.4"}]}}}};
+</script>
+<style>
+.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400;display:inline-block;line-height:1;vertical-align:middle}
+.node-pattern{background-image:radial-gradient(circle at 1px 1px,#474554 1px,transparent 0);background-size:40px 40px}
+.glass-card{background:rgba(42,41,50,.4);backdrop-filter:blur(12px);border:1px solid rgba(71,69,84,.3)}
+body{opacity:0;animation:pageIn .5s ease forwards}@keyframes pageIn{to{opacity:1}}
+.lift{transition:transform .25s,border-color .25s}.lift:hover{transform:translateY(-2px);border-color:rgba(199,191,255,.5)}
+.cta-press{transition:transform .15s,filter .2s}.cta-press:hover{transform:translateY(-1px);filter:brightness(1.08)}
+input{font-family:'JetBrains Mono',monospace}
+.active-pill{background:rgba(81,223,156,.18);color:#71fcb6;padding:2px 10px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.1em}
+</style></head>
+<body class="bg-surface-container-lowest text-on-surface font-body-md antialiased">
+
+<header class="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-outline-variant/30">
+  <div class="flex justify-between items-center h-16 px-margin max-w-[1440px] mx-auto">
+    <a href="/" class="flex items-center gap-sm">
+      <span class="material-symbols-outlined text-primary">hub</span>
+      <span class="text-headline-md font-headline-md tracking-tight">DecisionGraph</span>
+      <span class="text-micro-caps uppercase tracking-widest text-on-surface-variant ml-sm">PROJECTS</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-xl text-label-sm font-label-sm">
+      <a href="/app" class="text-on-surface-variant hover:text-on-surface">App</a>
+      <a href="/marketplace" class="text-on-surface-variant hover:text-on-surface">Marketplace</a>
+      <a href="/agents" class="text-on-surface-variant hover:text-on-surface">Agents</a>
+      <a href="/dashboard" class="text-on-surface-variant hover:text-on-surface">Dashboard</a>
+      <a href="/orchestration" class="text-on-surface-variant hover:text-on-surface">Orchestration</a>
+      <a href="/projects" class="text-on-surface">Projects</a>
+      <a href="/docs" class="text-on-surface-variant hover:text-on-surface">Docs</a>
+    </nav>
+  </div>
+</header>
+
+<main class="relative">
+  <div class="absolute inset-0 node-pattern opacity-15 pointer-events-none"></div>
+
+  <section class="relative max-w-[1100px] mx-auto px-margin pt-xl pb-margin">
+    <div class="text-micro-caps uppercase tracking-widest text-tertiary mb-sm">NAMED WORKSPACES · ISOLATED MEMORY · ONE CLICK SWITCH</div>
+    <h1 class="text-display font-display mb-md">Your projects</h1>
+    <p class="text-body-lg text-on-surface-variant max-w-3xl">
+      Each project has its own knowledge graph, decision memory, sessions, agent grants, and audit log — fully isolated.
+      Use different projects for different purposes: one for each client, one for personal research, one for a speculative bet.
+      MCP tokens minted from inside a project only reach that project's data.
+    </p>
+  </section>
+
+  <section class="relative max-w-[1100px] mx-auto px-margin pb-xl">
+    <div class="glass-card rounded-xl p-lg">
+      <h2 class="text-headline-md font-headline-md mb-md flex items-center gap-sm">
+        <span class="material-symbols-outlined text-primary">create_new_folder</span>
+        Create a new project
+      </h2>
+      <div class="flex gap-sm flex-wrap">
+        <input id="new-name" placeholder="e.g. ACME Pricing Strategy"
+          class="flex-1 min-w-[280px] bg-surface-container-low border border-outline-variant/40 rounded-lg px-md py-sm focus:outline-none focus:border-primary"/>
+        <button onclick="createProject()" class="cta-press bg-primary text-on-primary text-label-sm font-label-sm px-xl py-sm rounded-lg shadow-lg shadow-primary/10">+ Create &amp; switch</button>
+      </div>
+      <div id="create-status" class="mt-sm text-sm text-on-surface-variant"></div>
+    </div>
+  </section>
+
+  <section class="relative max-w-[1100px] mx-auto px-margin pb-xl">
+    <h2 class="text-headline-md font-headline-md mb-md flex items-center gap-sm">
+      <span class="material-symbols-outlined text-secondary">folder</span>
+      All projects on this device
+    </h2>
+    <div id="projects-grid" class="grid grid-cols-1 md:grid-cols-2 gap-gutter"></div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let DEVICE_ID = null;
+let ACTIVE_ID = null;
+
+async function jget(u){return (await fetch(u)).json();}
+async function jpost(u,b){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});return r.json();}
+
+async function loadProjects(){
+  const j = await jget('/api/projects');
+  DEVICE_ID = j.device_id;
+  ACTIVE_ID = j.active;
+  const grid = $('#projects-grid');
+  grid.innerHTML = '';
+  if (!(j.projects || []).length) {
+    grid.innerHTML = '<div class="col-span-full text-center text-on-surface-variant py-margin">No projects yet — create one above.</div>';
+    return;
+  }
+  j.projects.forEach(p => {
+    const isActive = p.id === ACTIVE_ID;
+    const created = new Date(p.created_at * 1000).toLocaleDateString();
+    grid.insertAdjacentHTML('beforeend', `
+      <div class="glass-card rounded-xl p-lg lift ${isActive ? 'border-tertiary' : ''}">
+        <div class="flex items-start justify-between mb-sm">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-sm mb-xs">
+              <h3 class="text-headline-md font-headline-md truncate" title="${p.name}">${p.name}</h3>
+              ${isActive ? '<span class="active-pill">ACTIVE</span>' : ''}
+            </div>
+            <div class="text-label-sm font-mono-data text-on-surface-variant">
+              ${p.id} &nbsp;·&nbsp; created ${created}
+            </div>
+            ${p.adopted ? '<div class="text-label-sm text-on-surface-variant mt-xs"><span class="material-symbols-outlined text-[14px]">history</span> migrated from your existing workspace</div>' : ''}
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-sm mt-md">
+          ${isActive
+            ? '<a href="/app" class="cta-press bg-tertiary text-on-primary text-label-sm font-label-sm px-md py-sm rounded-lg">Open in App ↗</a>'
+            : `<button onclick="switchTo('${p.id}')" class="cta-press bg-primary text-on-primary text-label-sm font-label-sm px-md py-sm rounded-lg">Switch to this</button>`}
+          <button onclick="renameProject('${p.id}', '${p.name.replace(/'/g, "\\'")}')" class="cta-press border border-outline-variant text-on-surface text-label-sm font-label-sm px-md py-sm rounded-lg hover:bg-surface-container-high">Rename</button>
+          ${!isActive ? `<button onclick="deleteProject('${p.id}', '${p.name.replace(/'/g, "\\'")}')" class="cta-press border border-error/40 text-error text-label-sm font-label-sm px-md py-sm rounded-lg hover:bg-error/10">Delete</button>` : ''}
+        </div>
+      </div>
+    `);
+  });
+}
+
+async function createProject(){
+  const name = $('#new-name').value.trim();
+  if (!name) { $('#create-status').textContent = 'name required'; return; }
+  $('#create-status').textContent = 'creating...';
+  try {
+    const j = await jpost('/api/projects', { name });
+    if (j.detail) { $('#create-status').innerHTML = '<span class="text-error">✗ ' + j.detail + '</span>'; return; }
+    // immediately switch to it
+    await jpost('/api/projects/' + j.project.id + '/switch');
+    $('#create-status').innerHTML = '<span class="text-tertiary">✓ created "' + j.project.name + '" — switching to it...</span>';
+    setTimeout(() => location.reload(), 500);
+  } catch (e) { $('#create-status').innerHTML = '<span class="text-error">✗ ' + e.message + '</span>'; }
+}
+
+async function switchTo(pid){
+  const j = await jpost('/api/projects/' + pid + '/switch');
+  if (j.switched) location.reload();
+}
+
+async function renameProject(pid, oldName){
+  const name = prompt('Rename project:', oldName);
+  if (!name || name === oldName) return;
+  const j = await jpost('/api/projects/' + pid + '/rename', { name });
+  if (j.project) location.reload();
+}
+
+async function deleteProject(pid, name){
+  if (!confirm(`Delete "${name}"?\n\nThe project record will be hidden but the underlying data on disk is preserved (you can recover it manually if needed).`)) return;
+  const j = await jpost('/api/projects/' + pid + '/delete');
+  if (j.deleted) location.reload();
+}
+
+loadProjects();
+</script>
+</body></html>

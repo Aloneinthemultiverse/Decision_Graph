@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "dash", "runtimeExecutable": "python", "runtimeArgs": ["-m","http.server","7777","--directory","dashboard"], "port": 7777 }
+  ]
+}

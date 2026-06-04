@@ -1,0 +1,1 @@
+{"detail":"TimesFM model failed to load: LocalEntryNotFoundError: Got: ConnectError: [WinError 10054] An existing connection was forcibly closed by the remote host\nAn error happened while trying to locate the files on the Hub and we cannot find the appropriate snapshot folder for the specified revision on the local disk. Please check your internet connection and try again."}

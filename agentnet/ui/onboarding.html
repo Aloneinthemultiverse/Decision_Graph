@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DecisionGraph · Onboarding</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script>
+tailwind.config = {darkMode:"class",theme:{extend:{colors:{
+"surface-container-lowest":"#0e0d15","surface-container-low":"#1c1b23","surface":"#13121b",
+"surface-container":"#201f27","surface-container-high":"#2a2932","surface-container-highest":"#35343d",
+"on-surface":"#e5e0ed","on-surface-variant":"#c9c4d7","outline":"#928ea0","outline-variant":"#474554",
+"primary":"#c7bfff","on-primary":"#2b009e",
+"secondary":"#4ddada","tertiary":"#51df9c","error":"#ffb4ab","warn":"#fbbf24"},
+borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem",full:"9999px"},
+spacing:{gutter:"24px",lg:"24px",margin:"32px",xl:"40px",md:"16px",xs:"4px",sm:"8px"},
+fontFamily:{"label-sm":["IBM Plex Sans"],"body-md":["Inter"],"body-lg":["Inter"],
+"headline-md":["Inter"],"headline-lg":["Inter"],"display":["Inter"],
+"mono-data":["JetBrains Mono"]},
+fontSize:{"label-sm":["13px",{lineHeight:"1",letterSpacing:"0.05em",fontWeight:"500"}],
+"micro-caps":["10px",{lineHeight:"1",letterSpacing:"0.1em",fontWeight:"700"}],
+"body-md":["16px",{lineHeight:"1.5"}],
+"body-lg":["18px",{lineHeight:"1.6"}],
+"headline-md":["24px",{lineHeight:"1.3",fontWeight:"600"}],
+"headline-lg":["32px",{lineHeight:"1.2",fontWeight:"600"}],
+"display":["40px",{lineHeight:"1.1",letterSpacing:"-0.02em",fontWeight:"700"}],
+"mono-data":["13px",{lineHeight:"1.4"}]}}}};
+</script>
+<style>
+.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400;display:inline-block;line-height:1}
+.node-pattern{background-image:radial-gradient(circle at 1px 1px,#474554 1px,transparent 0);background-size:40px 40px}
+.glass-card{background:rgba(42,41,50,.4);backdrop-filter:blur(12px);border:1px solid rgba(71,69,84,.3)}
+body{opacity:0;animation:pageIn .5s ease forwards}
+@keyframes pageIn{to{opacity:1}}
+.cta-press{transition:transform .15s ease,filter .2s ease}
+.cta-press:hover{transform:translateY(-1px);filter:brightness(1.08)}
+.cta-press:active{transform:scale(.97)}
+.lift{transition:transform .35s cubic-bezier(.16,1,.3,1),border-color .3s}
+.lift:hover{transform:translateY(-3px);border-color:rgba(199,191,255,.4)}
+.shortcut{font-family:'JetBrains Mono',monospace;font-size:11px;background:rgba(199,191,255,.1);color:#c7bfff;padding:2px 6px;border-radius:4px;border:1px solid rgba(199,191,255,.2)}
+.step-num{width:32px;height:32px;border-radius:9999px;background:rgba(199,191,255,.15);color:#c7bfff;display:grid;place-items:center;font:700 14px Inter;flex-shrink:0}
+.tour-q{cursor:pointer;transition:all .15s}
+.tour-q:hover{background:rgba(199,191,255,.06);border-color:rgba(199,191,255,.4)}
+input,textarea{font-family:'JetBrains Mono',monospace}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface font-body-md antialiased">
+
+<header class="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-outline-variant/30">
+  <div class="flex justify-between items-center h-16 px-margin max-w-[1440px] mx-auto">
+    <a href="/" class="flex items-center gap-sm">
+      <span class="material-symbols-outlined text-primary">hub</span>
+      <span class="text-headline-md font-headline-md tracking-tight">DecisionGraph</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-xl text-label-sm font-label-sm">
+      <a href="/marketplace" class="text-on-surface-variant hover:text-on-surface">Marketplace</a>
+      <a href="/agents"      class="text-on-surface-variant hover:text-on-surface">Agents</a>
+      <a href="/dashboard"   class="text-on-surface-variant hover:text-on-surface">Dashboard</a>
+      <a href="/orchestration" class="text-on-surface-variant hover:text-on-surface">Orchestration</a>
+      <a href="/projects"    class="text-on-surface-variant hover:text-on-surface">Projects</a>
+      <a href="/onboarding"  class="text-on-surface">Onboarding</a>
+      <a href="/docs"        class="text-on-surface-variant hover:text-on-surface">Docs</a>
+      <a href="/app"         class="text-on-surface-variant hover:text-on-surface">App ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main class="relative">
+  <div class="absolute inset-0 node-pattern opacity-20 pointer-events-none"></div>
+
+  <!-- HERO -->
+  <section class="relative max-w-[1280px] mx-auto px-margin pt-xl pb-md">
+    <div class="max-w-3xl">
+      <div class="text-micro-caps uppercase tracking-widest text-tertiary mb-sm">FOR NEW HIRES · FOR NEW AI SESSIONS</div>
+      <h1 class="text-display font-display mb-md">Onboarding Companion</h1>
+      <p class="text-body-lg text-on-surface-variant">
+        Day one, not week two. The full picture of this codebase — decisions, why's, recent edits — in one page.
+        Connect your AI tool and it knows what your team knows, instantly.
+      </p>
+    </div>
+  </section>
+
+  <!-- 3-STEP QUICKSTART -->
+  <section class="relative max-w-[1280px] mx-auto px-margin pb-xl grid lg:grid-cols-3 gap-gutter">
+    <div class="glass-card rounded-xl p-lg lift">
+      <div class="flex items-center gap-md mb-md">
+        <div class="step-num">1</div>
+        <h3 class="text-headline-md font-headline-md">Read the brief</h3>
+      </div>
+      <p class="text-on-surface-variant text-sm mb-md">A live snapshot of the codebase: overview, active topics, recent decisions, recent AI-driven edits, agent reputations.</p>
+      <a href="#brief" class="cta-press inline-flex items-center gap-xs text-primary text-sm">
+        <span class="material-symbols-outlined text-[16px]">arrow_downward</span>scroll to brief
+      </a>
+    </div>
+    <div class="glass-card rounded-xl p-lg lift">
+      <div class="flex items-center gap-md mb-md">
+        <div class="step-num">2</div>
+        <h3 class="text-headline-md font-headline-md">Connect your AI</h3>
+      </div>
+      <p class="text-on-surface-variant text-sm mb-md">Hook Claude Code / Cursor / your bot into this workspace via MCP. Every question they answer is grounded in your real history.</p>
+      <a href="/marketplace" class="cta-press inline-flex items-center gap-xs text-primary text-sm">
+        <span class="material-symbols-outlined text-[16px]">link</span>connect via MCP
+      </a>
+    </div>
+    <div class="glass-card rounded-xl p-lg lift">
+      <div class="flex items-center gap-md mb-md">
+        <div class="step-num">3</div>
+        <h3 class="text-headline-md font-headline-md">Ask anything</h3>
+      </div>
+      <p class="text-on-surface-variant text-sm mb-md">Try one of the suggested questions below — or write your own. Answers come with citations to the source.</p>
+      <a href="#ask" class="cta-press inline-flex items-center gap-xs text-primary text-sm">
+        <span class="material-symbols-outlined text-[16px]">arrow_downward</span>jump to ask box
+      </a>
+    </div>
+  </section>
+
+  <!-- BRIEF -->
+  <section id="brief" class="relative max-w-[1280px] mx-auto px-margin pb-xl">
+    <div class="glass-card rounded-xl p-lg">
+      <div class="flex items-center justify-between mb-md flex-wrap gap-md">
+        <div class="flex items-center gap-sm">
+          <span class="material-symbols-outlined text-primary">menu_book</span>
+          <h2 class="text-headline-md font-headline-md">The brief</h2>
+          <span id="brief-repo" class="text-on-surface-variant text-xs"></span>
+        </div>
+        <div class="flex items-center gap-sm">
+          <button onclick="copyBrief()" id="copyBtn" class="cta-press text-xs bg-surface-container-high border border-outline-variant rounded-lg px-md py-xs flex items-center gap-xs">
+            <span class="material-symbols-outlined text-[14px]">content_copy</span>Copy as prompt
+          </button>
+          <button onclick="loadBrief()" class="cta-press text-xs bg-primary/15 text-primary border border-primary/30 rounded-lg px-md py-xs flex items-center gap-xs">
+            <span class="material-symbols-outlined text-[14px]">refresh</span>Refresh
+          </button>
+        </div>
+      </div>
+      <div id="brief-loading" class="text-on-surface-variant text-sm py-md">
+        <span class="spin"></span> loading brief from your workspace…
+      </div>
+
+      <div id="brief-content" class="hidden space-y-lg">
+        <!-- overview -->
+        <div id="b-overview" class="hidden">
+          <div class="text-micro-caps text-tertiary mb-xs">OVERVIEW</div>
+          <p id="b-overview-text" class="text-on-surface leading-relaxed"></p>
+        </div>
+
+        <!-- topics + decisions side by side -->
+        <div class="grid md:grid-cols-2 gap-gutter">
+          <div>
+            <div class="text-micro-caps text-secondary mb-sm">ACTIVE TOPICS</div>
+            <div id="b-topics" class="space-y-sm"></div>
+          </div>
+          <div>
+            <div class="text-micro-caps text-primary mb-sm">RECENT DECISIONS</div>
+            <div id="b-decisions" class="space-y-sm"></div>
+          </div>
+        </div>
+
+        <!-- edits + agents -->
+        <div class="grid md:grid-cols-2 gap-gutter">
+          <div>
+            <div class="text-micro-caps text-warn mb-sm">RECENTLY EDITED BY AI</div>
+            <div id="b-edits" class="space-y-sm"></div>
+          </div>
+          <div>
+            <div class="text-micro-caps text-tertiary mb-sm">AI AGENTS ON RECORD</div>
+            <div id="b-agents" class="space-y-sm"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ASK BOX -->
+  <section id="ask" class="relative max-w-[1280px] mx-auto px-margin pb-xl">
+    <div class="glass-card rounded-xl p-lg">
+      <div class="flex items-center gap-sm mb-md">
+        <span class="material-symbols-outlined text-secondary">forum</span>
+        <h2 class="text-headline-md font-headline-md">Ask anything</h2>
+      </div>
+      <p class="text-on-surface-variant text-sm mb-md">Answered using your team's real decisions and ingested context. Click a suggestion or write your own.</p>
+
+      <div id="tour-suggestions" class="grid sm:grid-cols-2 gap-sm mb-md">
+        <button class="tour-q text-left bg-surface-container-high border border-outline-variant/40 rounded-lg p-md text-sm" data-q="Give me a 60-second tour of what this codebase actually does.">
+          <span class="material-symbols-outlined text-primary text-[16px] mr-xs">explore</span>
+          60-second tour of this codebase
+        </button>
+        <button class="tour-q text-left bg-surface-container-high border border-outline-variant/40 rounded-lg p-md text-sm" data-q="What are the most important architectural decisions we've made? Cite each one.">
+          <span class="material-symbols-outlined text-primary text-[16px] mr-xs">account_tree</span>
+          Most important architectural decisions
+        </button>
+        <button class="tour-q text-left bg-surface-container-high border border-outline-variant/40 rounded-lg p-md text-sm" data-q="What's been changed in the codebase recently and why?">
+          <span class="material-symbols-outlined text-primary text-[16px] mr-xs">history</span>
+          What's changed recently and why
+        </button>
+        <button class="tour-q text-left bg-surface-container-high border border-outline-variant/40 rounded-lg p-md text-sm" data-q="If I had to fix one bug this week, where in the code should I look?">
+          <span class="material-symbols-outlined text-primary text-[16px] mr-xs">bug_report</span>
+          Where to start if I had to fix one bug this week
+        </button>
+      </div>
+
+      <div class="flex gap-sm">
+        <input id="askInput" placeholder="Or type your own question…" class="flex-1 bg-surface-container-lowest border border-outline-variant focus:border-primary rounded-lg px-md py-sm text-sm focus:outline-none"/>
+        <button onclick="askIt()" id="askBtn" class="cta-press bg-primary text-on-primary px-lg py-sm rounded-lg text-sm font-semibold flex items-center gap-xs">
+          <span class="material-symbols-outlined text-[16px]">send</span>Ask
+        </button>
+      </div>
+      <div id="askOut" class="hidden mt-md bg-surface-container-lowest rounded-lg p-md text-sm"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let LAST_BRIEF = null;
+
+async function loadBrief(){
+  const loadingEl = $('#brief-loading');
+  const contentEl = $('#brief-content');
+  loadingEl.classList.remove('hidden');
+  contentEl.classList.add('hidden');
+  try {
+    const r = await fetch('/api/onboarding/brief');
+    const j = await r.json();
+    LAST_BRIEF = j;
+    renderBrief(j);
+  } catch(e) {
+    loadingEl.innerHTML = `<span class="text-error">Failed to load: ${e.message}</span>`;
+  }
+}
+
+function renderBrief(j){
+  $('#brief-loading').classList.add('hidden');
+  $('#brief-content').classList.remove('hidden');
+  $('#brief-repo').textContent = j.repo_name ? `· ${j.repo_name}` : '';
+
+  // overview
+  if (j.repo_overview && j.repo_overview.trim()) {
+    $('#b-overview').classList.remove('hidden');
+    $('#b-overview-text').textContent = j.repo_overview;
+  } else {
+    $('#b-overview').classList.add('hidden');
+  }
+
+  // topics
+  const topics = j.topics || [];
+  $('#b-topics').innerHTML = topics.length
+    ? topics.map(t => `
+        <div class="bg-surface-container-high border border-outline-variant/40 rounded-lg p-md">
+          <div class="text-secondary text-xs font-mono-data mb-xs">${escapeHtml(String(t.id))}</div>
+          <div class="text-sm text-on-surface">${escapeHtml(t.summary||'')}</div>
+        </div>`).join('')
+    : `<div class="text-on-surface-variant text-sm">No compiled topics yet. Run Dream Cycle on the Brain page to populate.</div>`;
+
+  // decisions
+  const decs = j.recent_decisions || [];
+  $('#b-decisions').innerHTML = decs.length
+    ? decs.map(d => `
+        <div class="bg-surface-container-high border border-outline-variant/40 rounded-lg p-md">
+          <div class="text-on-surface text-sm font-semibold mb-xs">${escapeHtml(d.question||'')}</div>
+          <div class="text-on-surface-variant text-xs">${escapeHtml(d.answer||'')}</div>
+          <div class="text-on-surface-variant/60 text-[10px] font-mono-data mt-xs">${(d.timestamp||'').slice(0,16)}${d.confidence?(' · conf '+d.confidence):''}</div>
+        </div>`).join('')
+    : `<div class="text-on-surface-variant text-sm">No decisions yet. Ingest a repo or capture an AI edit to populate.</div>`;
+
+  // edits
+  const edits = j.recent_edits || [];
+  $('#b-edits').innerHTML = edits.length
+    ? edits.map(e => `
+        <div class="bg-surface-container-high border border-warn/30 rounded-lg p-md">
+          <div class="text-on-surface text-sm">${escapeHtml(e.summary||'')}</div>
+          <div class="text-on-surface-variant/70 text-[10px] font-mono-data mt-xs">${(e.timestamp||'').slice(0,16)}</div>
+        </div>`).join('')
+    : `<div class="text-on-surface-variant text-sm">No AI edits captured yet. Wire <code class="text-primary">track_code_edit</code> into your Cursor/Claude Code flow.</div>`;
+
+  // agents
+  const rep = (j.agent_reputation && j.agent_reputation.top_agents) || [];
+  $('#b-agents').innerHTML = rep.length
+    ? rep.map(a => {
+        const c = {trusted:'text-tertiary',established:'text-secondary',unproven:'text-on-surface-variant',flagged:'text-warn',untrusted:'text-error'}[a.standing]||'text-on-surface-variant';
+        return `
+        <div class="bg-surface-container-high border border-outline-variant/40 rounded-lg p-md flex items-center justify-between">
+          <div>
+            <div class="text-on-surface text-sm font-semibold">${escapeHtml(a.name||'')}</div>
+            <div class="text-on-surface-variant text-xs">${a.jobs_completed||0} jobs · <span class="${c}">${a.standing}</span></div>
+          </div>
+          <div class="text-2xl font-mono-data text-on-surface">${a.score||0}</div>
+        </div>`;
+      }).join('')
+    : `<div class="text-on-surface-variant text-sm">No agents have run jobs yet. Mint a grant on /agents to get started.</div>`;
+}
+
+function copyBrief(){
+  const btn = $('#copyBtn');
+  if (!LAST_BRIEF || !LAST_BRIEF.brief_text) return;
+  navigator.clipboard.writeText(LAST_BRIEF.brief_text).then(() => {
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<span class="material-symbols-outlined text-[14px]">check</span>Copied';
+    setTimeout(() => { btn.innerHTML = orig; }, 1500);
+  });
+}
+
+// suggestion chips
+document.querySelectorAll('.tour-q').forEach(el => {
+  el.addEventListener('click', () => {
+    $('#askInput').value = el.dataset.q;
+    askIt();
+  });
+});
+
+async function askIt(){
+  const q = $('#askInput').value.trim();
+  if (!q) return;
+  const btn = $('#askBtn'); const out = $('#askOut');
+  btn.disabled = true;
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<span class="spin"></span>asking…';
+  out.classList.remove('hidden');
+  out.innerHTML = '<div class="text-on-surface-variant">Querying your DecisionGraph…</div>';
+  try {
+    const r = await fetch('/api/query', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({question: q, mode: 'deep', hybrid: true})
+    });
+    const j = await r.json();
+    if (j.error) {
+      out.innerHTML = `<span class="text-error">${escapeHtml(j.error)}</span>`;
+    } else {
+      const ans = j.answer || j.response || '(no answer)';
+      const cits = (j.citations || []).slice(0, 5);
+      out.innerHTML = `
+        <div class="border-l-2 border-primary pl-md py-xs">
+          <div class="text-on-surface whitespace-pre-wrap leading-relaxed">${escapeHtml(ans)}</div>
+          ${cits.length ? `<div class="text-on-surface-variant/70 text-[11px] font-mono-data mt-md pt-sm border-t border-outline-variant/30">
+            citations: ${cits.map(c => escapeHtml(c).slice(0, 60)).join(' · ')}
+          </div>` : ''}
+        </div>`;
+    }
+  } catch(e) {
+    out.innerHTML = `<span class="text-error">Failed: ${escapeHtml(e.message)}</span>`;
+  } finally {
+    btn.disabled = false; btn.innerHTML = orig;
+  }
+}
+
+function escapeHtml(s){
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Enter to submit
+$('#askInput').addEventListener('keydown', e => { if (e.key === 'Enter') askIt(); });
+
+// initial load
+loadBrief();
+</script>
+</body></html>
