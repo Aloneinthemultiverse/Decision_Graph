@@ -85,6 +85,11 @@ Each one is independent. Start only the ones the feature you use needs.
 
 ### 2.1 DecisionGraph
 
+> 📖 **Visual walkthrough:** [`docs/VISUAL_GUIDE.md`](docs/VISUAL_GUIDE.md) —
+> page-by-page tour of every DG screen with diagrams.
+> 🏢 **Enterprise architecture plan:** [`ENTERPRISE_OS_PLAN.md`](ENTERPRISE_OS_PLAN.md)
+> — how DG scales to multi-org / multi-team deployments.
+
 #### What it is, in one sentence
 **A long-term memory you can plug into any AI agent or team.** You feed it
 documents, code, websites, or just notes about decisions you made — and it
@@ -283,6 +288,10 @@ in `ARCHITECTURE.md`; reference in `DOCUMENTATION.md`.
 ---
 
 ### 2.2 AgentNet
+
+> 📖 **Visual walkthrough:** [`docs/VISUAL_GUIDE.md`](docs/VISUAL_GUIDE.md) —
+> see sections 5 (MCP · AgentNet keycard system), 7 (Marketplace), 8 (Agents),
+> 9 (Dashboard), 10 (Orchestration) for the AgentNet pages with diagrams.
 
 **Sandboxed agent runtime.** The safety layer that lets multiple agents act on
 the same workspace without trampling each other. Lives inside the DG package
